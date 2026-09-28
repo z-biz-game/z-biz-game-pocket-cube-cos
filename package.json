@@ -1,0 +1,40 @@
+{
+  "name": "pocket-cube",
+  "version": "1.0.0",
+  "description": "魔方袖珍 Pocket Cube — 浏览器原生二阶魔方. 每关 par 由 8!x3^7 状态群上的完整广度优先扫描量出, 关卡在构建期生成并复验.",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "node server.cjs",
+    "dev": "node server.cjs 5199",
+    "electron": "electron .",
+    "bake": "node tools/bake.mjs",
+    "survey": "node tools/survey.mjs",
+    "proof": "node tools/proof.mjs",
+    "check": "for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check \"$f\" || exit 1; done && echo OK",
+    "unit": "ok=1; for f in test/*.test.mjs; do node \"$f\" || ok=0; done; [ \"$ok\" = 1 ] || exit 1",
+    "test": "npm run check && npm run unit",
+    "verify": "bash tools/verify.sh"
+  },
+  "keywords": [
+    "game",
+    "puzzle",
+    "rubik",
+    "pocket-cube",
+    "2x2x2",
+    "bfs",
+    "procedural",
+    "electron"
+  ],
+  "author": "z-biz-game",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {},
+  "build": {
+    "appId": "com.zbiz.pocketcube",
+    "productName": "Pocket Cube",
+    "mac": { "category": "public.app-category.puzzle-games" },
+    "win": { "target": "nsis" },
+    "linux": { "target": "AppImage" }
+  }
+}

@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # The rule, the geometry, the two searchers and the shipped pool are all pure ES modules: no
+  # browser and no install step. Five suites are the reason this job exists:
+  #   * geom.test.mjs — the twelve turn tables are derived from 3x3 rotation matrices in
+  #     js/core/geom.js and cross-checked against an independent physical sticker model, so a
+  #     hand-typed corner table cannot ship a `par` that describes a different puzzle;
+  #   * library.test.mjs — re-solves every lot in js/data/lots.js, so a hand-edited par or a
+  #     stale bake fails the build instead of shipping;
+  #   * game.test.mjs — the rule at the shell's own boundary, including a lot that carries no
+  #     certified route at all (js/core/game.js used to throw on it);
+  #   * storage.test.mjs — the save file with no window at all, where a best score may only go
+  #     down and an unmeasured par cannot flatter a run;
+  #   * view.test.mjs — the sign of dragTurn(), which is the only place the gesture model is
+  #     stated as data: a flipped sense is invisible on screen (the cube turns, the counter
+  #     ticks) and ships a control that plays the inverse of the drag the player made.
+  # The exhaustive 88,179,840-cube sweep (FULL=1 node tools/proof.mjs, and js/core/fullsweep.js
+  # behind it) and the 5,000-cube survey (tools/survey.mjs) stay OUT of all three jobs: they are
+  # minutes to hours of CPU and hundreds of MB, and their whole output already lives, printed,
+  # in the header of the generated data file.
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check "$f"; done
+      - name: Suites
+        run: for f in test/*.test.mjs; do echo "::group::$f"; node "$f"; echo "::endgroup::"; done
+      # tools/check.mjs is the layering gate (the page must not import the build-time searcher
+      # layer, js/core must not touch the DOM, every relative import must resolve). verify.sh runs
+      # it, and the browser job runs verify.sh with SKIP_UNIT=1 — which skips exactly this file —
+      # so without this step the repo's one architectural rule would be enforced nowhere in CI.
+      - name: Layering
+        run: node tools/check.mjs
+
+  # tools/proof.mjs is the maths gate: it re-derives the twelve turn tables from rotation
+  # matrices, cross-checks them against an independent physical sticker model, round-trips the
+  # Lehmer encoding, proves the twist invariant exhaustively over every twist vector, re-solves
+  # 300 sampled cubes by both searchers and checks the pattern database for holes and
+  # 1-Lipschitz consistency over all 19,595,520 abstract edges. No suite imports any of that, so
+  # it ran nowhere until it got this job. Measured on a 2026 arm64 laptop: 214-233 s, 410 MB peak —
+  # the 300-cube double solve inside it reports its own 162 s, so the range is load, not flakiness.
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Proofs
+        run: node tools/proof.mjs
+
+  # The shell is only proven by driving a real page with real pointer drags: the hit test, the
+  # drag threshold and the save file all live behind `window.pocketcube`.
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Headless playtest
+        env:
+          SKIP_UNIT: 1
+          WD_TIMEOUT: 240
+        run: bash tools/verify.sh

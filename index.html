@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101318">
+<meta name="description" content="魔方袖珍：二阶魔方。屏幕上印的 par 是引擎在 8!×3^7 个状态上算出来的最少转数。">
+<link rel="icon" href="data:,">
+<title>魔方袖珍 · POCKET CUBE</title>
+<link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+<header class="topbar">
+  <h1 class="brand"><span class="brand-mark">◧</span>魔方袖珍<small>POCKET CUBE · QTM</small></h1>
+  <nav class="modes" id="modes" aria-label="模式">
+    <button type="button" data-mode="campaign">关卡</button>
+    <button type="button" data-mode="daily">每日</button>
+    <button type="button" data-mode="random">随机</button>
+  </nav>
+  <p class="totals" id="totals"></p>
+</header>
+
+<main class="stage">
+  <section class="board">
+    <canvas id="cube" aria-label="二阶魔方"></canvas>
+    <p class="hint-line" id="hintline"></p>
+    <div class="curtain" id="curtain" hidden>
+      <div class="curtain-card">
+        <p class="stars" id="stars"></p>
+        <h2 id="verdict"></h2>
+        <p class="tally" id="tally"></p>
+        <div class="curtain-actions">
+          <button type="button" id="again">再来一次</button>
+          <button type="button" id="next" class="primary">下一关</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel">
+    <p class="crumbs" id="crumbs"></p>
+    <dl class="readout" id="readout"></dl>
+    <div class="controls">
+      <button type="button" id="undo">撤销</button>
+      <button type="button" id="hint">提示</button>
+      <button type="button" id="restart">重开</button>
+      <button type="button" id="share">分享</button>
+    </div>
+    <div class="shelf" id="shelf"></div>
+    <details class="about">
+      <summary>这个 par 是哪来的</summary>
+      <p>度量是 <strong>QTM（quarter-turn metric）</strong>：一次面转 90° 算一步，转 180° 算两步，整体旋转不算步。状态群大小 <code>8! × 3^7 = 88,179,840</code>，可达当且仅当八个角块扭转之和 ≡ 0 (mod 3)。每关的 par 由 <code>js/core/bfs.js</code> 的双向广度优先搜索量出，<code>js/core/ida.js</code> 的 IDA* 独立复算，两者必须在同一批随机态上给出同一个数。</p>
+      <p>转动表不是抄来的：<code>js/core/geom.js</code> 用一个 3D 旋转矩阵作用在面的四个 slot 上推出循环与扭转增量，<code>tools/proof.mjs</code> 再检查它是双射且保持判据。</p>
+      <p>在魔方上按下并沿棱方向拖动 = 转一层（越过阈值只提交一次，反向拖 = 反向转）。在背景上拖动（或按住 Shift）只转视角：<strong>观察不算步数，也不改状态</strong>。</p>
+      <p class="save">成绩只存在这台设备的浏览器里。<button type="button" id="wipe">清空存档</button></p>
+    </details>
+  </aside>
+</main>
+
+<p class="toast" id="toast" hidden></p>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
