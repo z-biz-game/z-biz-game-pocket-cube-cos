@@ -272,7 +272,7 @@ node test/storage.test.mjs   → rows: 14 fail: 0    (0.03 s)
 node test/view.test.mjs      → rows:  5 fail: 0    (0.03 s，96 个手势三元组对物理贴纸模型)
 node tools/check.mjs         → rows:  4 fail: 0    (import 落盘 / core 不碰 DOM / core 不 import 壳 / 页面闭包不含构建期层)
 node tools/proof.mjs         → ALL PROOFS PASS     (35 行 ok / 0 FAIL；214–233 s, 峰值 410 MB) ⇒ CI 里独立一个 proof job
-bash tools/verify.sh         → 60 + 90 行, 0 失败, 25.0–28.3 s, console 空, === ALL GREEN ===
+bash tools/verify.sh         → 60 + 90 行, 0 失败, 25–29 s, console 空, === ALL GREEN ===
 ```
 
 三条历史故障要写清"错在哪一侧"，因为把它们读成"引擎有 bug"会误导下一位：
