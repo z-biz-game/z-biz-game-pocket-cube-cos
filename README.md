@@ -113,7 +113,7 @@ rejections across the run: {"par-out-of-band":127}
 ## 验收
 
 `bash tools/verify.sh` 一条命令跑两层。以下数字是本次在这台机器上跑出来的（2026-09-28，arm64 / node 26.8.1 /
-Chrome 154，整条门的量级是 25–29 s，七个逐次观测值与复现命令、逐条原因见 `deliverable.md` §5）：
+Chrome 154，整条门的量级是 25–29 s，逐次观测值、复现命令、逐条原因见 `deliverable.md` §5）：
 
 - **node 层**（60 行，`fail: 0`）：
 
