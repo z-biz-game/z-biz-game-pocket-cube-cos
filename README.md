@@ -113,7 +113,7 @@ rejections across the run: {"par-out-of-band":127}
 ## 验收
 
 `bash tools/verify.sh` 一条命令跑两层。以下数字是本次在这台机器上跑出来的（2026-09-28，arm64 / node 26.8.1 /
-Chrome 154，整条门 25.0–25.7 s；复现命令与逐条原因见 `deliverable.md` §5）：
+Chrome 154，整条门 25.0–28.3 s；复现命令与逐条原因见 `deliverable.md` §5）：
 
 - **node 层**（60 行，`fail: 0`）：
 
@@ -128,14 +128,16 @@ Chrome 154，整条门 25.0–25.7 s；复现命令与逐条原因见 `deliverab
 
 - **数学层**：`node tools/proof.mjs` → `ALL PROOFS PASS`（35 行 ok / 0 FAIL），实测 **214–233 s**、
   峰值 **410 MB**，在 CI 里是独立的 `proof` job（`.github/workflows/ci.yml`），因为它比其余全部加起来还贵一个量级。
-- **浏览器层**（90 行，`fail: 0`，墙钟 **16.8 s**：`SKIP_UNIT=1 bash tools/verify.sh`）：
+- **浏览器层**（90 行，`fail: 0`，墙钟本机 **16.8–17.4 s**、对着线上地址 **19.4–19.7 s**：
+  `SKIP_UNIT=1 bash tools/verify.sh`）：
   `@boot 17` / `@play 17` / `@routes 23` / `@save 14` / `@pointer 19`，
   台架驱动的是本仓钩子 `window.pocketcube`（不再是上一仓的 `window.gridlock`），
   console 干净、Chrome 自行退出、末行 `=== ALL GREEN ===`。
 - 这一层曾经**是**红的，而且红在产品代码上：`#/cube/<公式>` 直接崩壳、`超出` 给未实测的题印一个真数、
   转镜头后画面不重绘、未实测的题能拿到 `perfect`、`turns: null` 能写进存档，以及
   `dragsFor()` 承诺了四个方向而其中有些**按下去命中的是另一张贴纸**。
-  五条修完之后 `@play`/`@pointer` 才绿；过程与证据在 `deliverable.md` §2/§5，没有为了让它绿而放宽任何期望值。
+  这五处（`deliverable.md` §2#12–#16，六个症状，其中 `perfect` 与 `turns: null` 是同一条根因）
+  修完之后 `@play`/`@pointer`/`@routes` 才绿；过程与证据在 §2/§5，没有为了让它绿而放宽任何期望值。
 
 ## 文件地图
 
