@@ -31,6 +31,9 @@
 
 ## 跑起来
 
+线上版：`https://z-biz-game.github.io/z-biz-game-pocket-cube-cos/`（Pages 由 `.github/workflows/pages.yml`
+做文件拷贝式部署，没有构建步骤；这个地址本身也是浏览器层的第三个被测目标，见 `deliverable.md` §5.7）。
+
 ```bash
 node server.cjs            # http://127.0.0.1:5199/
 npm run check              # node --check 全量（js / tools / test / server / electron）

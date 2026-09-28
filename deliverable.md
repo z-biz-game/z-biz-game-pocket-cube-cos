@@ -15,8 +15,9 @@
 `js/core/storage.js`、`tools/verify.sh`、`tools/proof.mjs`、`tools/playtest.mjs`、
 `test/geom.test.mjs`、`.github/workflows/ci.yml`、`README.md`、`DESIGN.md`。
 本次新增：`tools/check.mjs`、`tools/modifiers.mjs`、`test/view.test.mjs`、`test/game.test.mjs`、
-`test/library.test.mjs`、`test/storage.test.mjs`。写本报告时**没有做过任何 git 写操作**（本仓在本次
-结束时才 `git init`），也没有新增任何运营功能（契约 §5 的禁令照守）。
+`test/library.test.mjs`、`test/storage.test.mjs`。git 侧本次做的是：`git init -b main` + **一次**提交
+（author 与 committer 都是 `z-biz-game <bot@z-biz-game.dev>`，per-repo 配置）+ 建远端 + 开 Pages
+（`build_type: workflow`）+ 推送 + 三层复验，全部记在 §5.7；没有新增任何运营功能（契约 §5 的禁令照守）。
 
 **并发写入**：本次工作期间本目录没有其他 agent 在写。查法：`ps` + `lsof`——9373 端口的 headless
 Chrome 属于 `/tmp/sky-chrome-profile`（兄弟仓的车道），9358 属于另一个临时 profile；本仓门禁用
@@ -441,9 +442,10 @@ real 25.74
 rc=0
 ```
 
-两个口径：**node 层 60 行 + 浏览器层 90 行 = 150 行，0 失败，25.7 s**（含 Chrome 起停；改完文档后
-又跑了一次同一命令，`rc=0`、`real 25.03`，两次都是 150 行 0 失败）；浏览器层单独跑
-（`SKIP_UNIT=1 bash tools/verify.sh`，也就是 CI `browser` job 的命令）本次实跑 `real 16.81`、`rc=0`。
+三个口径，同一台机器同一份代码跑了三次：**node 层 60 行 + 浏览器层 90 行 = 150 行，0 失败**，
+墙钟 `25.74` / `25.03` / `26.35` s（最后一次是**在 commit 之后对着入库的那棵树**跑的，也是 §5.7
+推上去之前的那次）；浏览器层单独跑（`SKIP_UNIT=1 bash tools/verify.sh`，也就是 CI `browser` job 的命令）
+本次实跑 `real 16.81`、`rc=0`。
 
 这一层在本次之前**是红的，而且红在产品代码上**，不是红在台架上：§2#12–#16 那五条
 （`#/cube/` 崩壳、`超出` 给未实测的题印真数、转镜头不重绘、未实测题能拿 `perfect`／`turns: null` 能入库、
@@ -467,7 +469,9 @@ node -e 'import("./js/core/geom.js").then(G=>{const {MOVES,SLOT_COORD,dot}=G;
  const img=s=>idx([dot(M[0],SLOT_COORD[s]),dot(M[1],SLOT_COORD[s]),dot(M[2],SLOT_COORD[s])]);
  console.log("hand cycle",c.join(","),"| engine successors",c.map(s=>m.to[s]).join(","),
    "| rodrigues successors",c.map(img).join(","));})'
-#    → 三行一致：2,6,4,0
+#    → hand cycle 2,6,4,0 | engine successors 6,4,0,2 | rodrigues successors 6,4,0,2
+#      后两列是"每个角块顺转之后的下一个角块"，与手抄循环 2→6→4→0→2 逐项相同；
+#      第一轮那次同样两列也是相等的，只是手抄列写成了 2,0,4,6（§2#1）
 
 # 2) proof.mjs 那条断言的两种写法差多少（换位子 vs x x' y y'）
 node -e '…for a,b in 0..11: [a,b,a^1,b^1] 与 [a,a^1,b,b^1] 是否回到已解…'
@@ -476,6 +480,56 @@ node -e '…for a,b in 0..11: [a,b,a^1,b^1] 与 [a,a^1,b,b^1] 是否回到已解
 # 3) 分层门的变异（临时改一下、跑、撤回来）
 node tools/check.mjs
 ```
+
+### 5.7 推上去之后：远端 CI 的日志原文 + 对着线上再跑一遍浏览器层
+
+本仓的提交历史是**两次**：一次含代码的 `a3f3e27`（author 与 committer 都是
+`z-biz-game <bot@z-biz-game.dev>`，per-repo 配置），一次只改 `README.md` + 本节（`a3f3e27` 之后
+补上线上的复验数字，**没有碰任何 `js/`、`css/`、`test/`、`tools/` 文件**）。建远端 → 开 Pages
+（`build_type: workflow`）→ 推送 → 三层复验。推送前对着**入库的那棵树**又跑了一次整条门：
+rc=0、150 行 0 失败（§5.5 的第三次）。远端两个 workflow 都绿，且**引的是各自日志里打印的数字**，
+不是徽标：
+
+```
+CI run 36382218027  (head_sha a3f3e274…)
+  unit    => completed/success   steps: Syntax ✓ / Suites ✓ / Layering ✓
+          rows: 10 fail: 0   rows: 18 fail: 0   rows: 9 fail: 0
+          rows: 14 fail: 0   rows:  5 fail: 0   rows: 4 fail: 0
+  proof   => completed/success   「ALL PROOFS PASS」＋「diameter: 未实测 — run FULL=1 …」
+  browser => completed/success
+          rows: 17 fail: 0   rows: 17 fail: 0   rows: 23 fail: 0
+          rows: 14 fail: 0   rows: 19 fail: 0   === ALL GREEN === → chrome exited
+Deploy to GitHub Pages run 36382218075 => completed/success
+```
+
+`unit` 里那 6 行 `rows:` 是 5 个套件 + `Layering` step 的 `tools/check.mjs`（本次新增的那一步），
+`browser` 的 5 行是 `@boot/@play/@routes/@save/@pointer` —— 与 §5.2/§5.5 本机的数字逐行相同，
+差别只在平台（Linux runner / node 22 vs 本机 arm64 / node 26）。
+
+线上复验（第三层，`SKIP_UNIT=1 BASE_URL=https://z-biz-game.github.io/z-biz-game-pocket-cube-cos/ bash tools/verify.sh`）：
+
+```
+opened https://z-biz-game.github.io/z-biz-game-pocket-cube-cos/
+(no console output)
+boot lot: cube-01
+=== @boot ===     rows: 17 fail: 0
+=== @play ===     rows: 17 fail: 0
+=== @routes ===   rows: 23 fail: 0
+=== @save ===     rows: 14 fail: 0
+=== @pointer ===  rows: 19 fail: 0
+=== console (must be empty of errors) ===
+(none)
+chrome exited
+=== ALL GREEN ===
+real 19.41
+rc=0
+```
+
+驱动的是**线上那份页面**（不是本地服务器）：台架用 `BASE_URL` 覆盖默认地址，Chrome 还是本机那个
+（devtools 9359），所以这一层量的是"Pages 上那份静态文件的闭包能不能真的玩通"。
+逐文件也核过 200 与字节数（`/` 3,135 B、`css/game.css` 6,335 B、`js/main.js` 17,889 B、
+`js/view.js` 19,207 B、`js/core/{cube,game,library,rng,storage,geom}.js` 9,399/7,723/5,431/1,523/6,048/11,580 B、
+`js/data/lots.js` 25,540 B）—— 每个都与本机磁盘上的同名文件同尺寸。
 
 ---
 
@@ -501,13 +555,15 @@ node tools/check.mjs
    被更近贴纸压住的那些带 `pressable: false`；台架与 `dragRoute()` 都只走 `pressable` 的那几个。
    也就是说"这一拖按下去是同一张贴纸"被验过了，"每个贴纸的每个方向都必须可按"
    **不是**本仓的主张（投影 + painter 顺序的固有性质，`DESIGN.md` §7.3/§9 同口径）。
-6. **GitHub Actions 的三条 job 本机没有执行过**（推上去之后在远端跑）。本机等价命令全部实跑：
-   `unit` = §5.2 + §5.3、`proof` = §5.4、`browser` = §5.5 的 `SKIP_UNIT=1`。远端与本机的差异主要是
-   node 版本（CI 22，本机 26）；本次输出里没有一处依赖特定 node 版本特性。
-7. **`pages.yml` 未执行过。** 它是文件拷贝式部署（`cp index.html` + `cp -r css js`），没有构建步骤，
-   也就是说**构建期就能发现的错**它挡不住——它挡的是路径。上线之后必须再验一次，这才是"绿"的第三层：
-   打开 `https://z-biz-game.github.io/<仓>/`、`js/`+`css/` 逐文件 200、
-   然后 `BASE_URL=https://… bash tools/verify.sh`（`SKIP_UNIT=1`）把浏览器层对着线上地址再跑一遍。
+6. **Actions 已经跑过了**（不再是"本机没执行过"）：`unit` / `proof` / `browser` 三条 job 与
+   `Deploy to GitHub Pages` 都在 `a3f3e27` 上绿，日志里自己打的数字见 §5.7。
+   留在账上的差异只有一条：runner 是 **node 22 / Linux**，本机是 **node 26 / arm64**——
+   两侧的 `rows:` 数字逐行相同，但本机上没有 node 22 可用来把 §5.2–§5.5 在 22 下重跑一遍，
+   所以"两个 node 版本之间没有行为差异"目前是**观察**，不是被验过的断言。
+7. **Pages 已经上线并且是对着线上地址复验的**（§5.7：90 行 0 失败、逐文件 200 且字节数与磁盘同名文件相同）。
+   没验的是两件事：`js/data/lots.js` 之类**改完之后**的 CDN 缓存失效路径（Pages 的 max-age 由它自己定，
+   换 nonce 才能确定性地让玩家拿到新表），以及 Pages 的构建失败会不会让线上留**上一个版本**
+   （会——那意味着"远端 CI 绿"和"线上是这一版"是两件事，§5.7 的逐文件字节核对就是为这个）。
 8. **存档只有一个键**：`SAVE_KEY = 'pocketcube.save.v1'`，没有迁移逻辑（v1 之前没有版本，所以没东西可迁）。
    下次改记录结构时必须**换键名**并在读侧兼容旧键，否则 `@save` 那 14 行会替玩家把旧档读成新档形状。
 9. **运营功能按禁令一律没做**：无成就 / 排行榜 / 签到 / 云存档 / 分享战绩、无音效彩带、无网络请求、
