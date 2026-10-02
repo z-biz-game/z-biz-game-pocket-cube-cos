@@ -12,6 +12,7 @@ import { ALL, TIERS, byId, dailyLot, fromScramble, levelAt, lotsIn, notation, ra
 import { todayKey } from './core/rng.js';
 import { store } from './core/storage.js';
 import { createView } from './view.js';
+import { createAudio } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -20,6 +21,8 @@ const el = {
   verdict: $('verdict'), tally: $('tally'), undo: $('undo'), hint: $('hint'),
   restart: $('restart'), share: $('share'), next: $('next'), again: $('again'),
   toast: $('toast'), canvas: $('cube'), wipe: $('wipe'),
+  pause: $('pause'), mute: $('mute'), fullscreen: $('fullscreen'),
+  help: $('help'), helpPanel: $('helpPanel'), helpClose: $('helpClose'),
 };
 
 const LEVELS = ALL.length;
@@ -83,6 +86,7 @@ function resolve(rt) {
 }
 
 const view = createView(el.canvas, { onCommit: (move) => commit(move) });
+const audio = createAudio();
 
 function setGame(lot, label) {
   app.lot = lot;
@@ -189,13 +193,22 @@ function render() {
 // The one place a turn happens: a drag from the view, a hint follow, and the test rig's
 // play() all arrive here, so the counter, the cube and the save line cannot drift apart.
 function commit(move) {
+  // Pause is a rule, not a paint setting: the sim is frozen in js/view.js, and a turn that changed
+  // the state behind a frozen animation would be the cube disagreeing with its own counter.
+  if (view.paused) {
+    say('已暂停 —— 按 P 或点「继续」再转');
+    return false;
+  }
   if (!turn(app.game, move)) {
     view.redraw();
     return false;
   }
   app.lastMove = move;
+  audio.turn(move);
   view.animate(move);
   if (app.game.done) {
+    audio.win(app.lot.par != null && app.game.moves <= app.lot.par);
+    view.burst(46);
     finish();
   } else {
     renderCrumbs();
@@ -282,6 +295,7 @@ el.modes.addEventListener('click', (ev) => {
 
 el.undo.addEventListener('click', () => {
   if (!undo(app.game)) return;
+  audio.undo();
   app.lastMove = null;
   el.curtain.hidden = true;
   view.redraw();
@@ -299,6 +313,7 @@ el.hint.addEventListener('click', () => {
     return;
   }
   view.showHint(h.move);
+  audio.hint();
   say(`提示：转 <b>${h.name}</b> —— 之后还需 <b>${h.left}</b> 转${onRoute(app.game) ? '' : '（先撤销回路线上）'}`);
   renderCrumbs();
 });
@@ -309,6 +324,7 @@ function restart() {
   app.lastMove = null;
   el.curtain.hidden = true;
   view.attach(app.game);
+  setPaused(false); // attach() cleared the sim's pause; the button has to say so too
   render();
   say('回到起点');
 }
@@ -317,6 +333,99 @@ el.restart.addEventListener('click', restart);
 el.share.addEventListener('click', shareLink);
 el.again.addEventListener('click', restart);
 el.next.addEventListener('click', () => go(`#/c/${Math.min(LEVELS, app.index + 1)}`));
+
+// ---- the board tools --------------------------------------------------------------
+
+function setPaused(v) {
+  const on = view.setPaused(!!v);
+  el.pause.setAttribute('aria-pressed', on ? 'true' : 'false');
+  el.pause.textContent = on ? '继续' : '暂停';
+  if (on) say('已暂停 —— 转视角仍然可用，转层不受理');
+  else view.redraw();
+  return on;
+}
+
+function setMuted(v) {
+  const on = audio.setMuted(!!v);
+  el.mute.setAttribute('aria-pressed', on ? 'true' : 'false');
+  el.mute.textContent = on ? '静音' : '音效';
+  return on;
+}
+
+// Fullscreen asks on the board, not the document: the panel next to the cube is the part a player
+// on a 13-inch laptop is happy to lose, and the readout survives in the hash-linked share card.
+async function toggleFullscreen() {
+  if (document.fullscreenElement) {
+    const exit = document.exitFullscreen;
+    if (typeof exit === 'function') await exit.call(document).catch(() => {});
+    return false;
+  }
+  const request = el.canvas.parentNode && el.canvas.parentNode.requestFullscreen;
+  if (typeof request !== 'function') {
+    toast('这台设备不给全屏');
+    return false;
+  }
+  await request.call(el.canvas.parentNode).catch(() => toast('全屏被拒绝'));
+  return !!document.fullscreenElement;
+}
+
+function syncFullscreen() {
+  const on = !!document.fullscreenElement;
+  el.fullscreen.setAttribute('aria-pressed', on ? 'true' : 'false');
+  el.fullscreen.textContent = on ? '退出全屏' : '全屏';
+}
+
+function showHelp(v) {
+  const on = !!v;
+  el.helpPanel.hidden = !on;
+  el.help.setAttribute('aria-expanded', on ? 'true' : 'false');
+  return on;
+}
+
+el.pause.addEventListener('click', () => setPaused(!view.paused));
+el.mute.addEventListener('click', () => setMuted(!audio.muted));
+el.fullscreen.addEventListener('click', () => { toggleFullscreen().then(syncFullscreen); });
+el.help.addEventListener('click', () => showHelp(el.helpPanel.hidden));
+el.helpClose.addEventListener('click', () => showHelp(false));
+document.addEventListener('fullscreenchange', syncFullscreen);
+
+// A browser will not hand over an audio clock before a gesture, and Electron will not hand over a
+// fullscreen screen. Both are unlocked from the first real input, once.
+const firstGesture = () => {
+  audio.unlock();
+  window.removeEventListener('pointerdown', firstGesture);
+  window.removeEventListener('keydown', firstGesture);
+};
+window.addEventListener('pointerdown', firstGesture);
+window.addEventListener('keydown', firstGesture);
+
+// The tutorial opens by itself exactly once per device. A player who has closed it has read it,
+// and a panel that returns on every reload is noise that teaches nothing.
+const HELP_SEEN = 'pocketcube.help.v1';
+let helpSeen = true;
+try {
+  helpSeen = localStorage.getItem(HELP_SEEN) === '1';
+} catch (err) {
+  void err; // private mode: the panel simply opens every visit, which is the old behaviour
+}
+if (!helpSeen) showHelp(true);
+el.helpClose.addEventListener('click', () => {
+  try {
+    localStorage.setItem(HELP_SEEN, '1');
+  } catch (err) {
+    void err;
+  }
+});
+
+// Installability. Only over http(s): a file:// origin (and therefore the packaged Electron app)
+// refuses registration, and a worker there could not fetch its own shell anyway.
+if (/^https?:$/.test(location.protocol) && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {
+      /* the game runs without it; the cache is an optimisation, not a feature */
+    });
+  });
+}
 
 // Wiping the save is the one destructive thing this game can do, so it asks twice rather than
 // firing on a stray click.
@@ -341,9 +450,24 @@ window.addEventListener('resize', () => view.measure());
 window.addEventListener('keydown', (ev) => {
   if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
   const k = ev.key.toLowerCase();
-  if (k === 'escape' && !el.curtain.hidden) el.curtain.hidden = true;
+  // Space means two different things depending on what is on screen: "carry on" while a result
+  // card or the tutorial is up, "stop the clock" during play. Both are handled where they live
+  // rather than by a mode flag nobody keeps in sync.
+  if (k === 'escape') {
+    if (!el.helpPanel.hidden) showHelp(false);
+    else if (!el.curtain.hidden) el.curtain.hidden = true;
+  } else if (k === 'enter' || (k === ' ' && (!el.curtain.hidden || !el.helpPanel.hidden))) {
+    ev.preventDefault();
+    if (!el.helpPanel.hidden) el.helpClose.click();
+    else if (!el.curtain.hidden) el.next.click();
+  } else if (k === ' ') {
+    ev.preventDefault();
+    setPaused(!view.paused);
+  } else if (k === 'p') setPaused(!view.paused);
+  else if (k === 'm') setMuted(!audio.muted);
+  else if (k === 'f') toggleFullscreen().then(syncFullscreen);
+  else if (k === 'h' || k === '?') showHelp(el.helpPanel.hidden);
   else if (k === 'u') el.undo.click();
-  else if (k === 'h') el.hint.click();
   else if (k === 'r') el.restart.click();
 });
 
@@ -378,6 +502,13 @@ window.pocketcube = {
       lastMove: app.lastMove === null ? null : MOVES[app.lastMove].name,
       hash: location.hash,
       frames: view.frames(),
+      // The simulation the harness compares across cadences, and the two flags a player can set.
+      // `audio` is the graph's own answer, so 「静音」 can be disproved by reading state ===
+      // 'running' while muted is true.
+      sim: view.sim,
+      paused: view.paused,
+      reducedMotion: view.reducedMotion(),
+      audio: audio.info(),
       total: LEVELS,
     };
   },

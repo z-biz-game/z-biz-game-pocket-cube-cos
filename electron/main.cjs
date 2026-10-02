@@ -12,7 +12,7 @@ async function createWindow() {
     minWidth: 780,
     minHeight: 600,
     backgroundColor: '#101217',
-    title: '死锁车库 Gridlock',
+    title: '魔方袖珍 Pocket Cube',
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,

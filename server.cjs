@@ -11,6 +11,7 @@ const TYPES = {
   '.cjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
@@ -59,7 +60,7 @@ if (require.main === module) {
   const port = Number(process.argv[2]) || Number(process.env.PORT) || 5199;
   startServer({ port })
     .then((server) => {
-      console.log(`Gridlock served at http://127.0.0.1:${port}/  (ctrl+c to stop)`);
+      console.log(`Pocket Cube served at http://127.0.0.1:${port}/  (ctrl+c to stop)`);
       process.on('SIGINT', () => server.close(() => process.exit(0)));
     })
     .catch((err) => {

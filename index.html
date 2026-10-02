@@ -5,7 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#101318">
 <meta name="description" content="魔方袖珍：二阶魔方。屏幕上印的 par 是引擎在 8!×3^7 个状态上算出来的最少转数。">
-<link rel="icon" href="data:,">
+<meta property="og:type" content="website">
+<meta property="og:title" content="魔方袖珍 · POCKET CUBE">
+<meta property="og:description" content="二阶魔方，88,179,840 个状态扫出来的 par。拖贴纸上转一层，拖背景上转视角。">
+<meta property="og:image" content="social/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="social/og.png">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+<link rel="icon" href="icons/favicon-48.png" sizes="48x48">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <title>魔方袖珍 · POCKET CUBE</title>
 <link rel="stylesheet" href="css/game.css">
 </head>
@@ -23,6 +34,12 @@
 <main class="stage">
   <section class="board">
     <canvas id="cube" aria-label="二阶魔方"></canvas>
+    <div class="tools" role="group" aria-label="工具">
+      <button type="button" id="help" aria-haspopup="dialog" aria-expanded="false">说明</button>
+      <button type="button" id="pause" aria-pressed="false">暂停</button>
+      <button type="button" id="mute" aria-pressed="false">音效</button>
+      <button type="button" id="fullscreen" aria-pressed="false">全屏</button>
+    </div>
     <p class="hint-line" id="hintline"></p>
     <div class="curtain" id="curtain" hidden>
       <div class="curtain-card">
@@ -33,6 +50,26 @@
           <button type="button" id="again">再来一次</button>
           <button type="button" id="next" class="primary">下一关</button>
         </div>
+      </div>
+    </div>
+    <div class="help" id="helpPanel" role="dialog" aria-label="玩法说明" hidden>
+      <div class="help-card">
+        <h2>怎么玩</h2>
+        <ol>
+          <li><b>在角块贴纸上按下、沿棱方向拖动</b>：转那一层。越过阈值只提交一次，反着拖就是反着转。</li>
+          <li><b>在背景上拖动（或按住 Shift 拖）</b>：只转视角。观察不算步数，也不改状态。</li>
+          <li><b>par</b> 是引擎在这个状态上量出的最少转数（QTM：面转 90° 记一步、180° 记两步）。打平 par 三星。</li>
+        </ol>
+        <dl class="keys">
+          <div><dt>P</dt><dd>暂停 / 继续</dd></div>
+          <div><dt>M</dt><dd>音效开关</dd></div>
+          <div><dt>F</dt><dd>全屏</dd></div>
+          <div><dt>R</dt><dd>重开本局</dd></div>
+          <div><dt>U</dt><dd>撤销一步</dd></div>
+          <div><dt>H / ?</dt><dd>开关本说明</dd></div>
+          <div><dt>Esc</dt><dd>关掉本说明</dd></div>
+        </dl>
+        <div class="help-actions"><button type="button" id="helpClose" class="primary">开始玩</button></div>
       </div>
     </div>
   </section>
@@ -51,7 +88,6 @@
       <summary>这个 par 是哪来的</summary>
       <p>度量是 <strong>QTM（quarter-turn metric）</strong>：一次面转 90° 算一步，转 180° 算两步，整体旋转不算步。状态群大小 <code>8! × 3^7 = 88,179,840</code>，可达当且仅当八个角块扭转之和 ≡ 0 (mod 3)。每关的 par 由 <code>js/core/bfs.js</code> 的双向广度优先搜索量出，<code>js/core/ida.js</code> 的 IDA* 独立复算，两者必须在同一批随机态上给出同一个数。</p>
       <p>转动表不是抄来的：<code>js/core/geom.js</code> 用一个 3D 旋转矩阵作用在面的四个 slot 上推出循环与扭转增量，<code>tools/proof.mjs</code> 再检查它是双射且保持判据。</p>
-      <p>在魔方上按下并沿棱方向拖动 = 转一层（越过阈值只提交一次，反向拖 = 反向转）。在背景上拖动（或按住 Shift）只转视角：<strong>观察不算步数，也不改状态</strong>。</p>
       <p class="save">成绩只存在这台设备的浏览器里。<button type="button" id="wipe">清空存档</button></p>
     </details>
   </aside>
