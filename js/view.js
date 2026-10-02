@@ -8,7 +8,14 @@
 // The drawing: an orthographic projection of eight unit cubes, rotated by yaw then pitch. Each
 // cubie shows three outward faces, and the colour on each of them comes from
 // geom.stickersOf(state) — the same table the twist bookkeeping comes from, so the screen
-// cannot disagree with the model about which sticker sits where. No images, no fonts.
+// cannot disagree with the model about which sticker sits where. The board is all paths; the one
+// bitmap is the win-splash sprite, and the game plays identically if it never arrives.
+//
+// Time here is simulated, not observed. `frame(ts)` turns the wall-clock delta into a debt and
+// pays it in whole SIM_STEP increments, so a turn animation, a hint timeout and a falling particle
+// reach the same state after the same number of steps on a 30 Hz screen and a 144 Hz one. Nothing
+// in this file may integrate by the frame's own delta — `accum += elapsed` below is the negative
+// control the frame-rate harness pins.
 //
 // A committed turn animates by rendering the moved layer at (1 - progress) of the *inverse*
 // rotation, so the first frame is the pre-turn picture and the last is exactly the state the
@@ -36,6 +43,26 @@ export const STICKER_LIFT = 0.03; // stickers are drawn just off the plastic, no
 export const STICKER_SIZE = 0.82;
 const DRAG_THRESHOLD = 16; // css pixels of travel before a drag becomes a turn
 const ANIM_MS = 170;
+const ANIM_S = ANIM_MS / 1000; // the integrator works in seconds, so the animation budget does too
+// Everything time-based in this file advances in fixed SIM_STEP increments, never by the
+// frame's wall-clock delta, so 30 Hz, 60 Hz and 144 Hz run the same simulation. See `frame`.
+const SIM_STEP = 1 / 120;
+const SPARK_S = 1.1; // a particle's whole life, in seconds
+const SPARK_GRAVITY = 620; // css pixels per second squared
+const SPARK_MAX = 90;
+const SPARK_SEED = 0x5eed17;
+// The splash draws from the cube's own palette, so a win looks like this game.
+const SPARK_COLORS = Object.values(FACE_COLOR);
+
+// A seeded LCG, not Math.random(): the win splash has to come out the same shape at 30 Hz and
+// at 144 Hz, which is only testable if the sequence it draws from is a function of the seed.
+function sparkRng(seed) {
+  let s = (seed >>> 0) || 1;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+}
 
 const AXES = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
 const axisIndexOf = (v) => (v[0] ? 0 : v[1] ? 1 : 2);
@@ -165,12 +192,34 @@ export function createView(canvas, { onCommit } = {}) {
   let h = 0;
   let dpr = 1;
   let raf = 0;
-  let anim = null; // { move, t0 }
-  let hint = null; // { move, until }
+  let anim = null; // { move, t } — t is sim seconds elapsed, not a wall-clock stamp
+  let hint = null; // { move, t } — t is sim seconds remaining
   let drag = null; // the live pointer, see down()
   let picked = []; // sticker quads of the last drawn frame, for hit-testing
   let frames = 0;
   let dirty = false; // the camera moved since the last paint: the loop owes a redraw
+  let sparks = [];
+  let rng = sparkRng(SPARK_SEED);
+  let sprite = null; // assets/tex/spark-64.png, created only when a burst is actually asked for
+  let paused = false;
+  let lastTs = 0;
+  let accum = 0; // leftover wall-clock time not yet paid for in whole sim steps
+  let simSteps = 0;
+  let simClock = 0;
+
+  // prefers-reduced-motion is a real branch, not a CSS note: under it the layer snaps to its
+  // final angle and no particle is ever spawned, so nothing in the sim has to be un-learned.
+  const motionQuery = typeof globalThis.matchMedia === 'function'
+    ? globalThis.matchMedia('(prefers-reduced-motion: reduce)')
+    : null;
+  let reducedMotion = !!(motionQuery && motionQuery.matches);
+  if (motionQuery && typeof motionQuery.addEventListener === 'function') {
+    motionQuery.addEventListener('change', (e) => {
+      reducedMotion = !!e.matches;
+      if (reducedMotion) sparks = [];
+      dirty = true;
+    });
+  }
 
   const state = () => (game ? game.state : SOLVED);
 
@@ -206,7 +255,7 @@ export function createView(canvas, { onCommit } = {}) {
   // the frame shows it partly taken back: at progress 0 that is exactly the pre-turn cube.
   function animRotation() {
     if (!anim) return null;
-    const e = Math.min(1, (performance.now() - anim.t0) / ANIM_MS);
+    const e = Math.min(1, anim.t / ANIM_S);
     if (e >= 1) {
       anim = null;
       return null;
@@ -238,7 +287,7 @@ export function createView(canvas, { onCommit } = {}) {
     const faces = stickerFaces(state());
     const extra = animRotation();
     const moving = anim ? anim.move : -1;
-    const hinted = hint && hint.until > performance.now() ? hint.move : -1;
+    const hinted = hint ? hint.move : -1;
     const order = [];
     for (let s = 0; s < 8; s++) {
       const centre = SLOT_COORD[s].map((v) => v * HALF);
@@ -280,8 +329,33 @@ export function createView(canvas, { onCommit } = {}) {
         list.push({ slot: s, k, face, pts: shown });
       }
     }
+    paintSparks();
     picked = list;
     frames++;
+  }
+
+  // The win splash: sprites from assets/tex/spark-64.png drawn at each particle's own sim
+  // position, faded by its remaining life. When the image has not arrived — or there is no Image
+  // constructor at all, as in the node harness — a filled arc stands in. Only the look changes:
+  // the trajectory is integrated by step() either way, so a test of frame-rate independence sees
+  // the same positions with or without the sprite.
+  function paintSparks() {
+    if (!sparks.length) return;
+    const ready = !!(sprite && sprite.complete && sprite.naturalWidth);
+    for (const p of sparks) {
+      const a = Math.max(0, p.life / SPARK_S);
+      const r = p.r * (0.55 + 0.45 * a);
+      ctx.globalAlpha = a;
+      if (ready) {
+        ctx.drawImage(sprite, p.x - r, p.y - r, r * 2, r * 2);
+      } else {
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   // ---- picking ----------------------------------------------------------------------
@@ -482,16 +556,88 @@ export function createView(canvas, { onCommit } = {}) {
   canvas.addEventListener('pointerup', upEv);
   canvas.addEventListener('pointercancel', upEv);
 
-  function frame() {
-    if (anim || dirty || (hint && hint.until > performance.now())) draw();
+  // ---- the simulation ---------------------------------------------------------------
+  //
+  // One fixed step of sim time. Everything that moves in this file moves here, measured in
+  // seconds: positions integrate as `x += vx * dt` and velocities as `vy += G * dt`, never as a
+  // per-frame `+= 0.5`, so a step is the same step whether the display ran it at 30 Hz or 144 Hz.
+  // This is the line the frame-rate harness pins; `accum += elapsed` above is its negative control.
+  function step(dt) {
+    simSteps++;
+    simClock += dt;
+    let moved = false;
+    if (anim) {
+      anim.t += dt;
+      if (anim.t >= ANIM_S) anim = null;
+      moved = true;
+    }
+    if (hint) {
+      hint.t -= dt;
+      if (hint.t <= 0) hint = null;
+      moved = true;
+    }
+    if (sparks.length) {
+      for (const p of sparks) {
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += SPARK_GRAVITY * dt;
+        p.life -= dt;
+      }
+      const live = sparks.filter((p) => p.life > 0);
+      if (live.length !== sparks.length) sparks = live;
+      moved = true;
+    }
+    return moved;
+  }
+
+  // Everything time-based, back to zero. Called by attach() so a restart cannot inherit a
+  // half-paid animation, falling particles, or an rng mid-sequence.
+  function resetSim() {
+    anim = null;
+    hint = null;
+    sparks = [];
+    rng = sparkRng(SPARK_SEED);
+    accum = 0;
+    lastTs = 0;
+    simSteps = 0;
+    simClock = 0;
+    paused = false;
+    dirty = true;
+  }
+
+  // The rAF callback owns wall-clock only as a debt to be paid in whole steps. `lastTs` starts at
+  // 0 and 0 is a legal timestamp, so the first frame of a run seeds the clock instead of billing
+  // its delta; the `!(elapsed > 0)` guard rejects a clock that went backwards.
+  function frame(ts) {
     raf = requestAnimationFrame(frame);
+    if (paused) {
+      lastTs = 0; // unpausing must not bill the paused interval
+      return;
+    }
+    if (!lastTs) {
+      lastTs = ts;
+      return;
+    }
+    let elapsed = (ts - lastTs) / 1000;
+    lastTs = ts;
+    if (!(elapsed > 0)) return;
+    // A backgrounded tab hands back minutes. Paying that debt in full would run thousands of
+    // steps in one callback, so it is capped: the sim skips real time rather than freezing paint.
+    if (elapsed > 0.25) elapsed = 0.25;
+    accum += elapsed;
+    let guard = 0;
+    let moved = false;
+    while (accum >= SIM_STEP && guard++ < 60) {
+      moved = step(SIM_STEP) || moved;
+      accum -= SIM_STEP;
+    }
+    if (moved || dirty) draw();
   }
 
   return {
     attach(g) {
       game = g;
-      anim = null;
-      hint = null;
+      resetSim();
       if (g && g.view) {
         view.yaw = g.view.yaw;
         view.pitch = g.view.pitch;
@@ -509,14 +655,105 @@ export function createView(canvas, { onCommit } = {}) {
     },
     orbit: orbitBy,
     animate(move) {
-      anim = { move, t0: performance.now() };
+      if (reducedMotion) {
+        // No tween: the state already holds the turn, so one paint at zero offset *is* the end.
+        anim = null;
+        draw();
+        return;
+      }
+      anim = { move, t: 0 };
     },
     showHint(move, ms = 1400) {
-      hint = { move, until: performance.now() + ms };
+      // A hint is information, not decoration, so it survives reduced motion — but it now expires
+      // on the sim clock like everything else.
+      hint = { move, t: ms / 1000 };
     },
     clearHint() {
       hint = null;
     },
+    // The win splash. Deterministic: the geometry comes from the seeded rng and the integration
+    // from step(), so two rates reach the same positions. Returns how many are alive.
+    burst(count = 46) {
+      if (reducedMotion) return 0;
+      if (!sprite && typeof Image === 'function') {
+        sprite = new Image();
+        sprite.src = 'assets/tex/spark-64.png';
+      }
+      const cx = w / 2;
+      const cy = h / 2;
+      const need = Math.max(0, Math.min(count, SPARK_MAX));
+      for (let i = 0; i < need; i++) {
+        const a = rng() * Math.PI * 2;
+        const speed = 90 + rng() * 260;
+        sparks.push({
+          x: cx + Math.cos(a) * 12,
+          y: cy + Math.sin(a) * 12,
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed - 120,
+          life: SPARK_S * (0.55 + rng() * 0.45),
+          r: 3 + rng() * 6,
+          color: SPARK_COLORS[(rng() * SPARK_COLORS.length) | 0],
+        });
+      }
+      if (sparks.length > SPARK_MAX) sparks = sparks.slice(-SPARK_MAX);
+      return sparks.length;
+    },
+    setPaused(v) {
+      paused = !!v;
+      lastTs = 0; // whatever passed while paused is not the sim's to catch up on
+      return paused;
+    },
+    get paused() {
+      return paused;
+    },
+    reducedMotion() {
+      return reducedMotion;
+    },
+    setReducedMotion(v) {
+      reducedMotion = !!v;
+      if (reducedMotion) {
+        anim = null;
+        sparks = [];
+      }
+      dirty = true;
+      return reducedMotion;
+    },
+    // Read by the frame-rate harness and by test/view.test.mjs. `frames` is deliberately here but
+    // is not a sim quantity: a 144 Hz display paints more often than a 30 Hz one, and that is the
+    // one difference that is supposed to exist. Everything else must match at equal `steps`.
+    get sim() {
+      let sx = 0;
+      let sy = 0;
+      let sv = 0;
+      let sl = 0;
+      for (const p of sparks) {
+        sx += p.x;
+        sy += p.y;
+        sv += Math.hypot(p.vx, p.vy);
+        sl += p.life;
+      }
+      const r4 = (n) => Math.round(n * 1e4) / 1e4;
+      const first = sparks[0] || null;
+      return {
+        steps: simSteps,
+        clock: r4(simClock),
+        accum: r4(accum),
+        paused,
+        reducedMotion,
+        animMove: anim ? anim.move : -1,
+        animT: anim ? r4(anim.t) : 0,
+        hintMove: hint ? hint.move : -1,
+        hintT: hint ? r4(hint.t) : 0,
+        sparks: sparks.length,
+        sparkSumX: r4(sx),
+        sparkSumY: r4(sy),
+        sparkSumV: r4(sv),
+        sparkSumLife: r4(sl),
+        spark0: first ? { x: r4(first.x), y: r4(first.y), vx: r4(first.vx), vy: r4(first.vy), life: r4(first.life) } : null,
+        frames,
+      };
+    },
+    resetSim,
     stickerAt,
     stickerPoint(slot, k) {
       const found = picked.find((s) => s.slot === slot && s.k === k);
