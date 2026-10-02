@@ -18,9 +18,10 @@
 import { test, run, ok, eq, fail } from '../tools/harness.mjs';
 import {
   MOVES, SLOT_COORD, applyMat, cross, dot, homeStickers, physicalSolved, physicalTurn,
-  rotationMatrix, sameVec,
+  rotationMatrix, sameVec, stickersOf,
 } from '../js/core/geom.js';
-import { dragTurn } from '../js/view.js';
+import { applySeq, solvedState } from '../js/core/cube.js';
+import { dragTurn, stickerFaces } from '../js/view.js';
 
 const AXES = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
 const neg = (v) => [-v[0], -v[1], -v[2]];
@@ -142,6 +143,43 @@ test('the gesture turns the layer that contains the corner, never the far one', 
     if (m.to[slot] === slot) bad.push({ slot, move, why: 'the corner it is standing on does not move' });
   }
   eq(bad, [], 'a drag on the back layer would turn four corners the player never touched');
+});
+
+// The other half of what the view paints: which colour lands on which face. `stickersOf` returns
+// a corner's three stickers in geom.twistCycle order, and that order is [x, y, z] for four of the
+// eight corners and [x, z, y] for the other four. A renderer pairing the k-th entry with the k-th
+// axis normal therefore swaps two stickers on half the cube — visible on a *solved* cube as a blue
+// sticker on the white face, which is precisely what js/view.js did until assets/gen/make-art.mjs
+// rendered the same table into an app icon and disagreed with the board.
+test('stickerFaces puts each colour on the face its own dir points at', () => {
+  const letterOf = (v) => (v[0] !== 0 ? (v[0] > 0 ? 'R' : 'L')
+    : v[1] !== 0 ? (v[1] > 0 ? 'U' : 'D') : (v[2] > 0 ? 'F' : 'B'));
+  const axisOf = (v) => (v[0] !== 0 ? 0 : v[1] !== 0 ? 1 : 2);
+  const states = [solvedState()];
+  for (const seq of [[0, 3, 6], [1, 4, 9], [2, 7, 11], [5, 8, 10]]) {
+    states.push(applySeq(solvedState(), seq));
+  }
+  const lies = [];
+  let indexPairingWouldLie = 0;
+  for (const st of states) {
+    const grid = stickersOf(st);
+    const faces = stickerFaces(st);
+    for (let s = 0; s < 8; s++) {
+      // the trap has to still be there, or this test proves nothing
+      if (grid[s].map((k) => axisOf(k.dir)).join() !== '0,1,2') indexPairingWouldLie++;
+      for (const k of grid[s]) {
+        const axis = axisOf(k.dir);
+        if (faces[s][axis] !== k.face) {
+          lies.push({ slot: s, axis, dir: k.dir.join(), got: faces[s][axis], want: k.face });
+        }
+        if (st === states[0] && k.face !== letterOf(k.dir)) {
+          lies.push({ slot: s, dir: k.dir.join(), got: k.face, want: letterOf(k.dir) });
+        }
+      }
+    }
+  }
+  eq(lies, [], 'a sticker was painted on a face it does not point at');
+  ok(indexPairingWouldLie > 0, 'twistCycle order is axis order everywhere, so an index pairing cannot be caught');
 });
 
 run();

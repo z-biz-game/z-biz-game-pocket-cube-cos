@@ -17,7 +17,9 @@
 
 import { MOVES, SLOT_COORD, cross, cwTurnOf, stickersOf } from './core/geom.js';
 
-const FACE_COLOR = {
+// Exported rather than duplicated: assets/gen/make-art.mjs rasterises the shipped icons with
+// these exact values, so an icon and a live frame cannot disagree about which colour face U is.
+export const FACE_COLOR = {
   U: '#eef1f6',
   D: '#f5d33f',
   R: '#e0524b',
@@ -25,13 +27,13 @@ const FACE_COLOR = {
   F: '#41c078',
   B: '#4b8fe8',
 };
-const PLASTIC = '#14181f';
-const PLASTIC_EDGE = 'rgba(226,232,240,0.16)';
-const HINT_EDGE = '#78dcff';
+export const PLASTIC = '#14181f';
+export const PLASTIC_EDGE = 'rgba(226,232,240,0.16)';
+export const HINT_EDGE = '#78dcff';
 
 const HALF = 0.5; // a cubie is a unit cube, so its slot centre sits at +/- 0.5
-const STICKER_LIFT = 0.03; // stickers are drawn just off the plastic, not inside it
-const STICKER_SIZE = 0.82;
+export const STICKER_LIFT = 0.03; // stickers are drawn just off the plastic, not inside it
+export const STICKER_SIZE = 0.82;
 const DRAG_THRESHOLD = 16; // css pixels of travel before a drag becomes a turn
 const ANIM_MS = 170;
 
@@ -92,9 +94,72 @@ function rotAbout(u, angle) {
   return m;
 }
 
+// ---- the camera, at module level -----------------------------------------------------
+//
+// Hoisted out of createView so that assets/gen/make-art.mjs rasterises the shipped icons with
+// the same matrix the canvas uses. `toViewPoint` is yaw-about-y then pitch-about-x; `quadPoints`
+// is the four corners of a sticker lifted off the plastic. Both are pure, and neither may be
+// reimplemented downstream — an icon drawn with its own projection is an icon that can silently
+// disagree with the game about which face the player is looking at.
+
+export const CAM_DEFAULT = { yaw: 0.62, pitch: 0.42 };
+
+export function applyMatrix(m, v) {
+  return [
+    m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2],
+    m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2],
+    m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2],
+  ];
+}
+
+export function toViewPoint(v, cam, extra) {
+  const p = extra ? applyMatrix(extra, v) : v;
+  const cy = Math.cos(cam.yaw);
+  const sy = Math.sin(cam.yaw);
+  const x = p[0] * cy - p[2] * sy;
+  const z1 = p[0] * sy + p[2] * cy;
+  const cp = Math.cos(cam.pitch);
+  const sp = Math.sin(cam.pitch);
+  return [x, p[1] * cp - z1 * sp, p[1] * sp + z1 * cp];
+}
+
+// The four corners of a square of side `size`, centred on `centre`, lifted `lift` along its
+// outward normal `n`, spanning the other two axes.
+export function quadPoints(centre, n, e1, e2, size, lift) {
+  const half = size / 2;
+  const o = HALF + lift;
+  const pts = [];
+  for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+    pts.push([
+      centre[0] + n[0] * o + e1[0] * half * a + e2[0] * half * b,
+      centre[1] + n[1] * o + e1[1] * half * a + e2[1] * half * b,
+      centre[2] + n[2] * o + e1[2] * half * a + e2[2] * half * b,
+    ]);
+  }
+  return pts;
+}
+
+// Which colour sits on which of a corner's three faces, indexed the way `slotNormals` is indexed.
+//
+// geom.stickersOf answers in twistCycle order, and twistCycle is [x, y, z] for four corners and
+// [x, z, y] for the other four. Pairing its output with `slotNormals` by list position therefore
+// swaps two stickers on half the cube — which is not a theoretical hazard: it is what this file
+// did, and it draws a *solved* cube with a blue sticker on the white face. Each sticker carries
+// its own direction, so the direction picks the axis and the index is recovered, not assumed.
+export function stickerFaces(state) {
+  const grid = stickersOf(state);
+  const out = [];
+  for (let s = 0; s < 8; s++) {
+    const byAxis = [null, null, null];
+    for (const st of grid[s]) byAxis[axisIndexOf(st.dir)] = st.face;
+    out.push(byAxis);
+  }
+  return out;
+}
+
 export function createView(canvas, { onCommit } = {}) {
   const ctx = canvas.getContext('2d');
-  const view = { yaw: 0.62, pitch: 0.42 };
+  const view = { yaw: CAM_DEFAULT.yaw, pitch: CAM_DEFAULT.pitch };
   let game = null;
   let w = 0;
   let h = 0;
@@ -126,23 +191,8 @@ export function createView(canvas, { onCommit } = {}) {
 
   const scale = () => Math.min(w, h) / 3.35;
 
-  function applyMatrix(m, v) {
-    return [
-      m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2],
-      m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2],
-      m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2],
-    ];
-  }
-
   function toView(v, extra) {
-    const p = extra ? applyMatrix(extra, v) : v;
-    const cy = Math.cos(view.yaw);
-    const sy = Math.sin(view.yaw);
-    const x = p[0] * cy - p[2] * sy;
-    const z1 = p[0] * sy + p[2] * cy;
-    const cp = Math.cos(view.pitch);
-    const sp = Math.sin(view.pitch);
-    return [x, p[1] * cp - z1 * sp, p[1] * sp + z1 * cp];
+    return toViewPoint(v, view, extra);
   }
 
   function project(p) {
@@ -170,22 +220,6 @@ export function createView(canvas, { onCommit } = {}) {
 
   // ---- drawing ----------------------------------------------------------------------
 
-  // The four corners of a square of side `size`, centred on `centre`, lifted `lift` along its
-  // outward normal `n`, spanning the other two axes.
-  function quadPoints(centre, n, e1, e2, size, lift) {
-    const half = size / 2;
-    const o = HALF + lift;
-    const pts = [];
-    for (const [a, b] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-      pts.push([
-        centre[0] + n[0] * o + e1[0] * half * a + e2[0] * half * b,
-        centre[1] + n[1] * o + e1[1] * half * a + e2[1] * half * b,
-        centre[2] + n[2] * o + e1[2] * half * a + e2[2] * half * b,
-      ]);
-    }
-    return pts;
-  }
-
   function tracePath(pts, extra) {
     ctx.beginPath();
     for (let i = 0; i < pts.length; i++) {
@@ -201,7 +235,7 @@ export function createView(canvas, { onCommit } = {}) {
     if (!w || !h) measure();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
-    const stickers = stickersOf(state());
+    const faces = stickerFaces(state());
     const extra = animRotation();
     const moving = anim ? anim.move : -1;
     const hinted = hint && hint.until > performance.now() ? hint.move : -1;
@@ -221,6 +255,7 @@ export function createView(canvas, { onCommit } = {}) {
       const normals = slotNormals(s);
       for (let k = 0; k < 3; k++) {
         const n = normals[k];
+        const face = faces[s][k];
         const e1 = normals[(k + 1) % 3];
         const e2 = normals[(k + 2) % 3];
         tracePath(quadPoints(centre, n, e1, e2, 1, 0), item.mine);
@@ -231,7 +266,7 @@ export function createView(canvas, { onCommit } = {}) {
         ctx.stroke();
         const pts = quadPoints(centre, n, e1, e2, STICKER_SIZE, STICKER_LIFT);
         tracePath(pts, item.mine);
-        ctx.fillStyle = FACE_COLOR[stickers[s][k].face] || '#7a7f8a';
+        ctx.fillStyle = FACE_COLOR[face] || '#7a7f8a';
         ctx.fill();
         const shown = pts.map((p) => screenOf(p, item.mine));
         if (hinted >= 0 && movesLayer(hinted, s)) {
@@ -242,7 +277,7 @@ export function createView(canvas, { onCommit } = {}) {
           ctx.lineWidth = 1;
         }
         ctx.stroke();
-        list.push({ slot: s, k, face: stickers[s][k].face, pts: shown });
+        list.push({ slot: s, k, face, pts: shown });
       }
     }
     picked = list;
