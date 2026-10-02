@@ -28,6 +28,10 @@ export function createAudio() {
   let muted = false;
   let lastTurn = -1;
   let lastTurnAt = 0;
+  // The graph exists only after a gesture has been honoured. Building it inside a tone would
+  // hand a suspended context to the browser and lose the note anyway, and it would make the
+  // module allocate the moment a test imported it.
+  let armed = false;
 
   function canConstruct() {
     return typeof globalThis.AudioContext === 'function' || typeof globalThis.webkitAudioContext === 'function';
@@ -54,6 +58,7 @@ export function createAudio() {
   function unlock() {
     const c = build();
     if (!c) return false;
+    armed = true;
     if (c.state === 'suspended' && !muted && typeof c.resume === 'function') return c.resume().then(() => true, () => false);
     return Promise.resolve(true);
   }
@@ -61,7 +66,8 @@ export function createAudio() {
   // One struck note: a fast attack, an exponential decay, and a lowpass that closes as the note
   // dies, which is what makes it read as plastic clicking rather than as a beep.
   function tone({ freq = 440, dur = 0.12, type = 'triangle', at = 0, peak = 1, sweep = 0 } = {}) {
-    if (muted) return false; // muted allocates nothing: no node, no connection, no scheduled stop
+    // Two reasons to allocate nothing: muted, or no gesture yet. Both return before any node.
+    if (muted || !armed) return false;
     const c = build();
     if (!c || c.state === 'closed' || !master) return false;
     const t0 = c.currentTime + at;
