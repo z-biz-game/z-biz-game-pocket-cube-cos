@@ -52,6 +52,28 @@
       <button type="button" id="share">分享</button>
       <button id="btn-fullscreen" type="button" aria-pressed="false" title="全屏（F）">全屏</button>
     </div>
+    <!-- 玩法说明块：引擎里没有规则文字表（没有 RULE_TEXT 之类的导出），规则只以代码存在，
+         所以下面每一句都对着一个函数写，改代码的人能逐条对回去，别让这块自己长出第二套口径：
+           目标/复原判定 → js/core/cube.js 的 isSolved (L44-49) 与 js/core/game.js 的 turn (L84-93)
+           QTM 一步的定义 → js/core/cube.js 头注释 (L18-19) 与 parseSeq 把 "F2" 拆成两转 (L144-147)
+           转数/par/超出 三个读数 → js/main.js 的 renderCrumbs (L117-122)
+           三档评级 → js/core/game.js 的 grade (L158-164)，无 par 时的"复原了" → 同上 L159 + main.js L210-222
+           16px 阈值/一次拖动一转/Shift 或空白处只转视角 → js/view.js 的 DRAG_THRESHOLD (L35)、
+             moveEv 里 `if (drag.done) return` (L431) 与 down 里的 `orbit: !hit || ev.shiftKey` (L388)
+           复原后拒绝转动、撤销退步数 → js/core/game.js 的 turn (L85) 与 undo (L97-104)
+           提示只认认证路线、偏离明说、无路线时按钮灰 → js/core/game.js 的 hint (L126-152) 与 main.js L124
+           键盘 U/H/R/Esc/F → js/main.js 的 keydown (L341-348) 与全屏 IIFE (L549-557)
+           六个面符号与 ' / 2 → js/core/geom.js 的 FACES (L117-122) 与 cube.js 的 parseSeq (L130-151)
+           不会给出无解魔方 → js/core/cube.js 的 twist 不变量 (L11) 与 library.js 的 fromScramble (L93) -->
+    <details class="about">
+      <summary>玩法：怎么转、怎么算赢</summary>
+      <p><strong>目标</strong>：把魔方转回复原态 —— 八个角块每一个都回到自己的位置、并且朝向归零（等价于六个面各自同色）。面板的 <code>转数</code> 是你已经用掉的步数，<code>超出</code> 是它减去 <code>par</code>。</p>
+      <p><strong>一步怎么算</strong>：度量是 <strong>QTM</strong>。一次面转 90° 记 1 步，转 180° 记 2 步，整体旋转不算步。<code>par</code> 是在 8!×3⁷ 个状态上量出的最少转数，所以它是一个证明，不是估计。</p>
+      <p><strong>怎么操作</strong>：在魔方上按住一个角块的贴纸，沿着一条棱的方向拖 —— 手指走够 16px 才提交，一次拖动只提交一转。在空白处拖动、或按住 Shift 拖动，都只是转视角：<strong>观察不计步数、也不改状态</strong>。键盘：<code>U</code> 撤销 · <code>H</code> 提示 · <code>R</code> 重开 · <code>Esc</code> 收起胜利卡 · <code>F</code> 全屏。</p>
+      <p><strong>几档才算好</strong>：不超过 <code>par</code> 是 ★★★「一手不差」，多 1–3 步是 ★★「干净收口」，再多就是 ★「绕了一圈」。手输乱序进来的那一路没有实测 <code>par</code>（面板上写「未实测」），只判「复原了」，用 ◆ 而不是星星。</p>
+      <p><strong>几条限制</strong>：复原之后不能再转（<code>game.js</code> 会拒绝一切新的转动）；撤销会把步数一起退回来；提示只认构建期烘焙好的认证路线，走偏了它会直说「已偏离认证路线」而不是给你一个没人验证过的数，没有路线的那一路提示按钮是灰的。</p>
+      <p><strong>符号</strong>：面板上的乱序用 U D L R F B 六个面记，<code>'</code> 是反向、<code>2</code> 是半转。你拿到的每一局都一定能复原 —— 八个角块的扭转之和恒为 0 (mod 3)，所以不存在"卡死"的魔方。</p>
+    </details>
     <div class="shelf" id="shelf"></div>
     <details class="about">
       <summary>这个 par 是哪来的</summary>
