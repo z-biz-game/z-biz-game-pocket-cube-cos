@@ -150,3 +150,16 @@ a[href],
   min-height: 44px !important;
   min-width: 44px !important;
 }
+
+/* ---------- 减弱动效（prefers-reduced-motion）---------- */
+/* 本仓当前**没有**可减的装饰性动效：view.js 里的 Math.sin 是立方体的 yaw/pitch 旋转，**那是玩法本身**；减掉它等于把 3D 魔方变成静态图。可减的装饰只有下面这三条兜底
+   剩下的 :hover 颜色瞬切与 focus 轮廓是状态反馈，不是动效，动了反而更难用。 */
+@media (prefers-reduced-motion: reduce) {
+  /* 当下这三条不命中任何东西；写在这里是为了将来有人加动画/过渡时自动被归零，
+     而不必再想起来补这一段。颜色、透明度、命中区、focus 轮廓一律不动。 */
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
