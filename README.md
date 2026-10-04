@@ -162,7 +162,7 @@ js/view.js            canvas 2D 自写投影 + 手势（拖面 = 转，拖空白
 js/main.js            路由、DOM、存档写入、window.pocketcube 测试钩子
 server.cjs            零依赖静态服务器（默认 5199，与 tools/verify.sh 同端口）
 electron/main.cjs     桌面壳（复用同一个服务器，port 0）
-tools/bake.mjs        扫描 → 出题 → 逐关独立重解 → 写 js/data/lots.js，拒绝在失败时写 / tools/assemble-site / tools/deploy-set / tools/deploy-set-selftest
+tools/bake.mjs        扫描 → 出题 → 逐关独立重解 → 写 js/data/lots.js，拒绝在失败时写
 tools/survey.mjs      决定四档边界的量具（5000 题 par 直方图 + 各带接受率）
 tools/proof.mjs       对外锚点集合：转表双射、判据穷举、编码互逆、启发可采纳（CI 里独立一个 proof job）
 tools/check.mjs       分层门：相对 import 全部落盘、js/core 不碰 DOM、core 不 import 壳、从 js/main.js 走得到的模块闭包里没有构建期层
