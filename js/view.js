@@ -477,24 +477,39 @@ export function createView(canvas, { onCommit } = {}) {
 
   // ---- the pointer ------------------------------------------------------------------
 
-  function local(ev) {
+  // One press, in canvas-local CSS pixels, whichever input flavour reported it. Pointer Events
+  // carry clientX on the event; a TouchEvent carries it only on its touches, and by `touchend`
+  // `touches` is empty so the finger that lifted comes from `changedTouches`. The subtraction is
+  // against the *rendered* rect: `w`/`h` are rect pixels while the backing store is `w * dpr`, so
+  // taking clientX here puts a press in the same space `project()` paints in. Reading the backing
+  // store instead would make a finger on the top-left sticker commit the bottom-right one on every
+  // screen that is not 1x — and a CSS-scaled canvas is exactly that.
+  function stroke(ev) {
+    const t = (ev.touches && ev.touches.length) ? ev.touches[0]
+      : (ev.changedTouches && ev.changedTouches.length) ? ev.changedTouches[0]
+        : ev;
     const box = canvas.getBoundingClientRect();
-    return { x: ev.clientX - box.left, y: ev.clientY - box.top };
+    return {
+      x: t.clientX - box.left,
+      y: t.clientY - box.top,
+      id: ev.pointerId,
+      shift: ev.shiftKey === true,
+    };
   }
 
   function down(ev) {
     if (!game) return;
-    const p = local(ev);
+    const p = stroke(ev);
     const hit = stickerAt(p.x, p.y);
     drag = {
-      id: ev.pointerId,
+      id: p.id,
       x0: p.x,
       y0: p.y,
       lastX: p.x,
       lastY: p.y,
       slot: hit ? hit.slot : -1,
       k: hit ? hit.k : -1,
-      orbit: !hit || ev.shiftKey === true, // nothing under the finger, or a held modifier
+      orbit: !hit || p.shift, // nothing under the finger, or a held modifier
       done: false,
       committed: null,
     };
@@ -528,7 +543,7 @@ export function createView(canvas, { onCommit } = {}) {
 
   function moveEv(ev) {
     if (!drag || (ev.pointerId !== undefined && drag.id !== undefined && ev.pointerId !== drag.id)) return;
-    const p = local(ev);
+    const p = stroke(ev);
     if (drag.orbit) {
       orbitBy(p.x - drag.lastX, p.y - drag.lastY);
       drag.lastX = p.x;
@@ -551,10 +566,35 @@ export function createView(canvas, { onCommit } = {}) {
     drag = null;
   }
 
-  canvas.addEventListener('pointerdown', down);
-  canvas.addEventListener('pointermove', moveEv);
-  canvas.addEventListener('pointerup', upEv);
-  canvas.addEventListener('pointercancel', upEv);
+  // Pointer Events first, because they are the one API that reports pen, touch and mouse with the
+  // same geometry and gives `setPointerCapture` a real id to hold. Where it is missing — an older
+  // webview, or an Electron built without it — the same three handlers are reached through touch
+  // and mouse instead. Exactly one of these two blocks runs, so a press can never be billed twice.
+  const hasPointerEvents = typeof PointerEvent === 'function';
+  if (hasPointerEvents) {
+    canvas.addEventListener('pointerdown', down);
+    canvas.addEventListener('pointermove', moveEv);
+    canvas.addEventListener('pointerup', upEv);
+    canvas.addEventListener('pointercancel', upEv);
+  } else {
+    // `passive: false` is the point of the touchstart binding: `down` calls preventDefault, and a
+    // passive listener would silently drop it and let the page scroll under the finger instead of
+    // turning a layer.
+    canvas.addEventListener('touchstart', down, { passive: false });
+    canvas.addEventListener('touchmove', moveEv, { passive: false });
+    canvas.addEventListener('touchend', upEv);
+    canvas.addEventListener('touchcancel', upEv);
+    canvas.addEventListener('mousedown', down);
+    // Mouse move/up live on the window, not the canvas: a dragged-outside pointer that released
+    // over the panel must still end the stroke, or the next stray move keeps turning the cube.
+    if (typeof window !== 'undefined' && window.addEventListener) {
+      window.addEventListener('mousemove', moveEv);
+      window.addEventListener('mouseup', upEv);
+    } else {
+      canvas.addEventListener('mousemove', moveEv);
+      canvas.addEventListener('mouseup', upEv);
+    }
+  }
 
   // ---- the simulation ---------------------------------------------------------------
   //

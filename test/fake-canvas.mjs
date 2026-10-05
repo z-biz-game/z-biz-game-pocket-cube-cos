@@ -51,8 +51,16 @@ function makeContext(canvas) {
   };
 }
 
-export function createCanvasStub({ width = 320, height = 320 } = {}) {
+// `rect` is the CSS box, which a browser lets differ from both the backing store and the canvas's
+// own width/height: a HiDPI screen and a `width: 100%` stylesheet both do it on their own. Leaving
+// it out means rect === the attribute, i.e. the one case that cannot expose a coordinate bug.
+export function createCanvasStub({ width = 320, height = 320, rect = null } = {}) {
+  const box = rect || { left: 0, top: 0, width, height };
   const listeners = new Map();
+  const bind = (type, fn, options) => {
+    if (!listeners.has(type)) listeners.set(type, []);
+    listeners.get(type).push({ fn, options });
+  };
   const canvas = {
     width,
     height,
@@ -60,23 +68,34 @@ export function createCanvasStub({ width = 320, height = 320 } = {}) {
     nodeType: 1,
     tagName: 'CANVAS',
     parentNode: null,
-    getBoundingClientRect: () => ({ x: 0, y: 0, left: 0, top: 0, width, height, right: width, bottom: height }),
-    addEventListener: (type, fn) => {
-      if (!listeners.has(type)) listeners.set(type, []);
-      listeners.get(type).push(fn);
+    getBoundingClientRect: () => ({
+      x: box.left,
+      y: box.top,
+      left: box.left,
+      top: box.top,
+      width: box.width,
+      height: box.height,
+      right: box.left + box.width,
+      bottom: box.top + box.height,
+    }),
+    addEventListener: (type, fn, options = null) => {
+      bind(type, fn, options);
     },
     removeEventListener: (type, fn) => {
       const list = listeners.get(type) || [];
-      const at = list.indexOf(fn);
+      const at = list.findIndex((b) => b.fn === fn);
       if (at >= 0) list.splice(at, 1);
     },
     setPointerCapture: () => {},
     releasePointerCapture: () => {},
     getContext: () => canvas.__ctx,
     dispatch(type, ev = {}) {
-      for (const fn of listeners.get(type) || []) fn(ev);
+      for (const b of listeners.get(type) || []) b.fn(ev);
     },
     listenerCount: (type) => (listeners.get(type) || []).length,
+    // The first binding for an event type, options and all: enough to assert *how* something was
+    // attached (a passive touchstart would silently drop preventDefault), not just that it was.
+    binding: (type) => (listeners.get(type) || [])[0] || null,
   };
   canvas.__ctx = makeContext(canvas);
   canvas.__ops = canvas.__ctx.ops;
@@ -140,5 +159,28 @@ export function createRafQueue() {
       for (const cb of batch.values()) cb(ts);
       return batch.size;
     },
+  };
+}
+
+// A window with nothing but an event bus. view.js puts the mouse `mousemove`/`mouseup` on the window
+// rather than the canvas, and that choice is only observable if the window can be asked who it is
+// holding — a drag released over the panel has to end the stroke, not arm it for the next stray move.
+export function createWindowStub() {
+  const listeners = new Map();
+  return {
+    listeners,
+    addEventListener(type, fn, options = null) {
+      if (!listeners.has(type)) listeners.set(type, []);
+      listeners.get(type).push({ fn, options });
+    },
+    removeEventListener(type, fn) {
+      const list = listeners.get(type) || [];
+      const at = list.findIndex((b) => b.fn === fn);
+      if (at >= 0) list.splice(at, 1);
+    },
+    dispatch(type, ev = {}) {
+      for (const b of listeners.get(type) || []) b.fn(ev);
+    },
+    listenerCount: (type) => (listeners.get(type) || []).length,
   };
 }
