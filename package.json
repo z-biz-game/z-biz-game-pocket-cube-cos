@@ -9,9 +9,10 @@
     "dev": "node server.cjs 5199",
     "electron": "electron .",
     "bake": "node tools/bake.mjs",
+    "art": "node assets/gen/make-art.mjs",
     "survey": "node tools/survey.mjs",
     "proof": "node tools/proof.mjs",
-    "check": "for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check \"$f\" || exit 1; done && echo OK",
+    "check": "for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs assets/gen/*.mjs; do node --check \"$f\" || exit 1; done && echo OK",
     "unit": "ok=1; for f in test/*.test.mjs; do node \"$f\" || ok=0; done; [ \"$ok\" = 1 ] || exit 1",
     "test": "npm run check && npm run unit",
     "verify": "bash tools/verify.sh"

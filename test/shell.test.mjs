@@ -11,6 +11,7 @@ import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
 import { dirname, resolve, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, run, ok, eq } from '../tools/harness.mjs';
+import { readPng } from '../assets/gen/png.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
@@ -153,6 +154,68 @@ test('the icon set covers the sizes a device and a store actually ask for', () =
     ok(mf[req], `manifest.webmanifest has no ${req}`);
   }
   ok(mf.id === './' && mf.scope === './', 'manifest scope must follow the site root, not one path');
+});
+
+// Header checks cannot see pixels, and this repo shipped a hole because of it:
+// icons/icon-maskable-512.png was 81% transparent — a maskable tile that lets the launcher's own
+// backdrop through the mask — while every row above stayed green. So: decode the bitmap and judge
+// it by the role its name claims.
+test('each bitmap is a readable picture for the role its name claims', () => {
+  const measure = (rel) => {
+    const { w, h, data } = readPng(join(ROOT, rel));
+    const alphaAt = (x, y) => data[(y * w + x) * 4 + 3];
+    let solid = 0;
+    for (let i = 3; i < data.length; i += 4) if (data[i] === 255) solid++;
+    const tally = new Map();
+    for (let i = 0; i < data.length; i += 4) {
+      const k = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2];
+      tally.set(k, (tally.get(k) || 0) + 1);
+    }
+    let mode = 0;
+    let seen = 0;
+    for (const [k, n] of tally) if (n > seen) { seen = n; mode = k; }
+    const base = [(mode >> 16) & 255, (mode >> 8) & 255, mode & 255];
+    let sum = 0;
+    let motifR = 0;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = (y * w + x) * 4;
+        const d = Math.max(Math.abs(data[i] - base[0]), Math.abs(data[i + 1] - base[1]), Math.abs(data[i + 2] - base[2]));
+        sum += d;
+        if (d > 60) motifR = Math.max(motifR, Math.hypot(x + 0.5 - w / 2, y + 0.5 - h / 2));
+      }
+    }
+    return {
+      w, h,
+      coverage: solid / (w * h),
+      corners: Math.max(alphaAt(0, 0), alphaAt(w - 1, 0), alphaAt(0, h - 1), alphaAt(w - 1, h - 1)),
+      centre: alphaAt(w >> 1, h >> 1),
+      activity: sum / (w * h),
+      motifR,
+    };
+  };
+
+  const maskable = measure('icons/icon-maskable-512.png');
+  ok(maskable.coverage > 0.999, `maskable tile is ${(maskable.coverage * 100).toFixed(1)}% opaque — the launcher paints its own background through the rest`);
+  const safe = 0.4 * maskable.w;
+  ok(maskable.motifR <= safe, `maskable motif reaches ${maskable.motifR}px, past the ${safe}px safe radius — Android would clip the cube`);
+  ok(maskable.motifR > safe * 0.7, `maskable motif only reaches ${maskable.motifR}px of ${safe}px: a small sticker on a big field`);
+
+  const plates = ['icons/favicon-16.png', 'icons/favicon-32.png', 'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png'];
+  for (const rel of plates) {
+    const p = measure(rel);
+    ok(p.corners === 0, `${rel}: corner alpha ${p.corners}, a rounded plate must be masked clear`);
+    ok(p.centre === 255, `${rel}: centre alpha ${p.centre}, the middle of the plate must be solid`);
+    ok(p.coverage > 0.55 && p.coverage < 0.95, `${rel}: ${(p.coverage * 100).toFixed(1)}% opaque is not a rounded slab`);
+  }
+
+  const ground = measure('assets/tex/blueprint-256.png');
+  ok(ground.coverage > 0.999, `page ground tile is ${(ground.coverage * 100).toFixed(1)}% opaque — the body has no colour of its own under it`);
+  ok(ground.activity >= 6, `page ground activity ${ground.activity.toFixed(1)}: the tile is flat paint, not a blueprint`);
+
+  const sprite = measure('assets/tex/spark-64.png');
+  ok(sprite.centre >= 150, `particle sprite centre alpha ${sprite.centre}: too faint to read as a dot`);
+  ok(sprite.corners === 0, 'particle sprite must fade to nothing at its edge');
 });
 
 // og:image with a relative path is a card with no picture: crawlers resolve it against their own

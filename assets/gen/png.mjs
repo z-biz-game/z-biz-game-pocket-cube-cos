@@ -66,13 +66,59 @@ export function writePng(file, w, h, rgba) {
   return file;
 }
 
+// The read side of this file's own format, so an audit can look at the bytes that landed on disk
+// rather than at the buffer that was handed to the encoder. Only what `encodePng` can produce is
+// accepted: 8-bit, colour type 6, non-interlaced. Anything else throws, because a decoder that
+// quietly guesses turns the audit into a lie.
+export function readPng(file) {
+  const buf = typeof file === 'string' ? fs.readFileSync(file) : file;
+  if (buf.length < 8 || buf.toString('latin1', 0, 8) !== '\x89PNG\r\n\x1a\n') throw new Error('not a PNG');
+  let p = 8;
+  let w = 0;
+  let h = 0;
+  const idat = [];
+  while (p < buf.length) {
+    const len = buf.readUInt32BE(p);
+    const type = buf.toString('ascii', p + 4, p + 8);
+    const body = buf.subarray(p + 8, p + 8 + len);
+    if (type === 'IHDR') {
+      w = body.readUInt32BE(0);
+      h = body.readUInt32BE(4);
+      if (body[8] !== 8 || body[9] !== 6 || body[12] !== 0) throw new Error(`unsupported PNG: depth ${body[8]} ctype ${body[9]} interlace ${body[12]}`);
+    } else if (type === 'IDAT') idat.push(body);
+    else if (type === 'IEND') break;
+    p += 12 + len;
+  }
+  const raw = zlib.inflateSync(Buffer.concat(idat));
+  const stride = w * 4;
+  const out = Buffer.alloc(w * h * 4);
+  let pos = 0;
+  for (let y = 0; y < h; y++) {
+    const filter = raw[pos];
+    pos += 1;
+    const line = Buffer.from(raw.subarray(pos, pos + stride));
+    pos += stride;
+    // Deliberately only what `encodePng` writes: filter 0 on every scanline. The day this encoder
+    // starts picking filters, this line becomes the error that says so, not a silent misread.
+    if (filter !== 0) throw new Error(`PNG filter ${filter} is not what encodePng writes`);
+    line.copy(out, y * stride);
+  }
+  return { w, h, data: out };
+}
+
 export function createCanvas(w, h, bg = [0, 0, 0, 0]) {
   const data = Buffer.alloc(w * h * 4);
+  // Colours in this file carry alpha as a 0..1 float (that is what rgba() emits and what
+  // blendPixel consumes), while the framebuffer stores a 0..255 byte. Writing bg[3] raw made
+  // `createCanvas(N, N, rgba(TILE, 1))` a 0.4%-opaque field, which is how the maskable icon
+  // shipped 81% transparent — a maskable tile has to be full-bleed or the launcher's own
+  // backdrop shows through the mask.
+  const bgA = Math.round(bg[3] * 255);
   for (let i = 0; i < w * h; i++) {
     data[i * 4] = bg[0];
     data[i * 4 + 1] = bg[1];
     data[i * 4 + 2] = bg[2];
-    data[i * 4 + 3] = bg[3];
+    data[i * 4 + 3] = bgA;
   }
   return { w, h, data };
 }

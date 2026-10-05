@@ -30,7 +30,7 @@ import {
   CAM_DEFAULT, FACE_COLOR, PLASTIC, STICKER_LIFT, STICKER_SIZE, quadPoints, stickerFaces, toViewPoint,
 } from '../../js/view.js';
 import {
-  blendPixel, createCanvas, downsample, fillPoly, fillRect, hex, rgba, shade, writePng,
+  blendPixel, createCanvas, downsample, fillPoly, fillRect, hex, readPng, rgba, shade, writePng,
 } from './png.mjs';
 import { drawText, textWidth } from './font5x7.mjs';
 import { grain } from './noise.mjs';
@@ -164,10 +164,70 @@ function vGradient(cv, x, y, w, h, from, to, coverage = 1) {
 
 const OUT = [];
 
-function emit(rel, cv) {
+// Measured from the bytes on disk, because every dimension check in the world passed while
+// icons/icon-maskable-512.png was 81% transparent — the one thing a maskable tile may never be.
+// `kind` says what the file is for, and the numbers come back into the self-check table.
+function auditPng(rel, kind, wantW, wantH) {
+  const { w, h, data } = readPng(path.join(ROOT, rel));
+  const alphaAt = (x, y) => data[(y * w + x) * 4 + 3];
+  let solid = 0;
+  for (let i = 3; i < data.length; i += 4) if (data[i] === 255) solid++;
+  const coverage = solid / (w * h);
+  const corners = Math.max(alphaAt(0, 0), alphaAt(w - 1, 0), alphaAt(0, h - 1), alphaAt(w - 1, h - 1));
+  const centre = alphaAt(w >> 1, h >> 1);
+  // How far the motif reaches, measured against the tile's own ground. The ground is the most
+  // frequent colour, not pixel (0, 0): the blueprint draws a grid line through its top-left corner,
+  // and taking that as the base made every field pixel count as motif.
+  const tally = new Map();
+  for (let i = 0; i < data.length; i += 4) {
+    const k = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2];
+    tally.set(k, (tally.get(k) || 0) + 1);
+  }
+  let mode = 0;
+  let seen = 0;
+  for (const [k, n] of tally) if (n > seen) { seen = n; mode = k; }
+  const base = [(mode >> 16) & 255, (mode >> 8) & 255, mode & 255];
+  let r = 0;
+  let sum = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4;
+      const d = Math.max(Math.abs(data[i] - base[0]), Math.abs(data[i + 1] - base[1]), Math.abs(data[i + 2] - base[2]));
+      sum += d;
+      if (d > 60) r = Math.max(r, Math.hypot(x + 0.5 - w / 2, y + 0.5 - h / 2));
+    }
+  }
+  const pct = (n) => `${(n * 100).toFixed(1)}%`;
+  const fails = [];
+  if (kind === 'fullbleed') {
+    if (coverage < 0.999) fails.push(`coverage ${pct(coverage)} < 100%`);
+  } else if (kind === 'plate') {
+    if (corners > 0) fails.push(`corner alpha ${corners} > 0 (a plate must be masked clear)`);
+    if (centre < 255) fails.push(`centre alpha ${centre} < 255`);
+    if (coverage < 0.55 || coverage > 0.95) fails.push(`coverage ${pct(coverage)} off the rounded-slab band`);
+  } else if (kind === 'ground') {
+    if (coverage < 0.999) fails.push(`coverage ${pct(coverage)} < 100%`);
+  } else if (kind === 'sprite') {
+    if (corners > 0) fails.push(`corner alpha ${corners} > 0`);
+    if (centre < 150) fails.push(`sprite centre alpha ${centre} too faint to read as a dot`);
+    if (coverage > 0.5) fails.push(`sprite coverage ${pct(coverage)}: a splash of 90 of these must not tile solid`);
+  }
+  if (rel.includes('maskable')) {
+    // Android masks to a circle of radius 0.4 * side; the motif has to live inside it.
+    if (r > 0.4 * w) fails.push(`motif reaches ${r.toFixed(0)}px, past the ${0.4 * w}px safe radius`);
+  }
+  if (w !== wantW || h !== wantH) fails.push(`${w}x${h} != ${wantW}x${wantH}`);
+  const activity = sum / (w * h);
+  if (kind === 'ground' && activity < 6) fails.push(`texture activity ${activity.toFixed(1)} < 6: the ground reads as flat paint`);
+  return { fails, coverage: pct(coverage), motifR: Math.round(r), activity: activity.toFixed(1) };
+}
+
+function emit(rel, cv, { kind = 'fullbleed', w = cv.w, h = cv.h } = {}) {
   const file = path.join(ROOT, rel);
   writePng(file, cv.w, cv.h, cv.data);
-  OUT.push({ rel, w: cv.w, h: cv.h, bytes: fs.statSync(file).size });
+  const audit = auditPng(rel, kind, w, h);
+  if (audit.fails.length) throw new Error(`${rel}: ${audit.fails.join('; ')}`);
+  OUT.push({ rel, w: cv.w, h: cv.h, bytes: fs.statSync(file).size, kind, ...audit });
 }
 
 // An app tile: rounded dark slab, amber bloom, cube centred in it.
@@ -184,13 +244,13 @@ function appIcon(side, ss, { slots = ALL_SLOTS, off = [0, 0, 0], unit = 3.35, fi
 
 // 1. favicons — one corner cubie, because a whole cube at 16px is unreadable
 for (const [side, ss] of [[16, 4], [32, 4], [48, 4], [64, 3]]) {
-  emit(`icons/favicon-${side}.png`, appIcon(side, ss, { slots: SINGLE_SLOT, off: SINGLE_OFFSET, unit: 1.74, fit: 0.92 }));
+  emit(`icons/favicon-${side}.png`, appIcon(side, ss, { slots: SINGLE_SLOT, off: SINGLE_OFFSET, unit: 1.74, fit: 0.92 }), { kind: 'plate' });
 }
 
 // 2. the bitmaps a store actually wants — the assembled 2x2
 for (const [side, ss] of [[96, 3], [128, 3], [180, 3], [192, 3], [256, 2], [384, 2], [512, 2], [1024, 2]]) {
   const name = side === 180 ? 'apple-touch-icon.png' : `icon-${side}.png`;
-  emit(`icons/${name}`, appIcon(side, ss, { fit: 0.9 }));
+  emit(`icons/${name}`, appIcon(side, ss, { fit: 0.9 }), { kind: 'plate' });
 }
 
 // 3. maskable — full-bleed square with the motif inside the 80% safe zone, because Android
@@ -200,8 +260,8 @@ for (const [side, ss] of [[96, 3], [128, 3], [180, 3], [192, 3], [256, 2], [384,
   const ss = 2;
   const big = createCanvas(side * ss, side * ss, rgba(TILE, 1));
   radialGlow(big, big.w / 2, big.h / 2, big.w * 0.5, AMBER, 0.1);
-  drawCube(big, { cx: big.w / 2, cy: big.h / 2, scale: (big.w / 3.35) * 0.56 });
-  emit('icons/icon-maskable-512.png', downsample(big, ss));
+  drawCube(big, { cx: big.w / 2, cy: big.h / 2, scale: (big.w / 3.35) * 0.72 });
+  emit('icons/icon-maskable-512.png', downsample(big, ss), { kind: 'fullbleed' });
 }
 
 // 4. the social card, 1200x630
@@ -254,7 +314,7 @@ for (const [side, ss] of [[96, 3], [128, 3], [180, 3], [192, 3], [256, 2], [384,
     bx += 70;
   }
   if (bx - 70 > RIGHT) throw new Error('face colour band overflows the card');
-  emit('social/og.png', cv);
+  emit('social/og.png', cv, { kind: 'fullbleed' });
 }
 
 // 5. tileable page ground
@@ -264,18 +324,18 @@ for (const [side, ss] of [[96, 3], [128, 3], [180, 3], [192, 3], [256, 2], [384,
   for (let y = 0; y < N; y++) {
     for (let x = 0; x < N; x++) {
       const g = grain(x, y);
-      blendPixel(cv, x, y, rgba(g > 0 ? INK : BG2, 1), Math.abs(g) * 0.05);
+      blendPixel(cv, x, y, rgba(g > 0 ? INK : BG2, 1), Math.abs(g) * 0.09);
     }
   }
   for (let p = 0; p < N; p += 32) {
     const major = p % 128 === 0;
-    fillRect(cv, 0, p, N, 1, rgba(major ? AMBER : INK, 1), major ? 0.05 : 0.028);
-    fillRect(cv, p, 0, 1, N, rgba(major ? AMBER : INK, 1), major ? 0.05 : 0.028);
+    fillRect(cv, 0, p, N, 1, rgba(major ? AMBER : INK, 1), major ? 0.16 : 0.075);
+    fillRect(cv, p, 0, 1, N, rgba(major ? AMBER : INK, 1), major ? 0.16 : 0.075);
   }
   for (let y = 0; y < N; y += 128) {
-    for (let x = 0; x < N; x += 128) fillRect(cv, x, y, 2, 2, rgba(CYAN, 1), 0.22);
+    for (let x = 0; x < N; x += 128) fillRect(cv, x, y, 2, 2, rgba(CYAN, 1), 0.5);
   }
-  emit('assets/tex/blueprint-256.png', cv);
+  emit('assets/tex/blueprint-256.png', cv, { kind: 'ground' });
 }
 
 // 6. particle sprite
@@ -295,7 +355,7 @@ for (const [side, ss] of [[96, 3], [128, 3], [180, 3], [192, 3], [256, 2], [384,
   }
   fillPoly(cv, [{ x: N / 2 - 4, y: N / 2 - 4 }, { x: N / 2 + 4, y: N / 2 - 4 },
     { x: N / 2 + 4, y: N / 2 + 4 }, { x: N / 2 - 4, y: N / 2 + 4 }], rgba(INK, 1), 0.5);
-  emit('assets/tex/spark-64.png', cv);
+  emit('assets/tex/spark-64.png', cv, { kind: 'sprite' });
 }
 
 // ---- self-check ----------------------------------------------------------------------
@@ -311,7 +371,7 @@ for (const o of OUT) {
   const ctype = buf[25];
   const ok = sig && w === o.w && h === o.h && depth === 8 && ctype === 6 && o.bytes > 64 && buf.length > 64;
   if (!ok) bad++;
-  console.log(`${ok ? 'ok  ' : 'FAIL'} ${o.rel.padEnd(32)} ${String(w)}x${String(h)}  ${String(o.bytes).padStart(7)} B  rgba8`);
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${o.rel.padEnd(32)} ${String(w)}x${String(h)}  ${String(o.bytes).padStart(7)} B  ${o.kind.padEnd(10)} solid=${o.coverage.padEnd(6)} motif_r=${String(o.motifR).padStart(4)} act=${o.activity}`);
 }
 console.log(`${OUT.length - bad}/${OUT.length} bitmaps verified, 0 failures expected`);
 if (bad) process.exitCode = 1;

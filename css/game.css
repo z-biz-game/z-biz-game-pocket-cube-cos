@@ -18,8 +18,10 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
 body {
+  /* A vignette over the blueprint tile, not a veil in front of it: at 0.92/0.97 only 3–8% of the
+     texture reached the eye, which erased a grid whose loudest line sits 33 levels over its field. */
   background:
-    radial-gradient(120% 100% at 50% 0%, rgba(22, 26, 33, 0.92), rgba(15, 18, 23, 0.97) 60%),
+    radial-gradient(120% 100% at 50% 0%, rgba(22, 26, 33, 0.62), rgba(15, 18, 23, 0.86) 60%),
     url("../assets/tex/blueprint-256.png") repeat;
   background-size: auto, 256px 256px;
   color: var(--ink); font-family: var(--mono); -webkit-font-smoothing: antialiased;
