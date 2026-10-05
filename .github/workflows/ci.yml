@@ -41,7 +41,7 @@ jobs:
       # assets/gen/make-art.mjs owns and fails if the tree disagrees — the case a header test cannot
       # see, because a PNG with the wrong alpha bytes is still a valid PNG at the right size.
       - name: Art regenerates byte-identical
-        run: node assets/gen/make-art.mjs && git diff --exit-code -- icons social assets/tex
+        run: node assets/gen/make-art.mjs && git diff --exit-code -- icons social assets/tex build
       - name: Suites
         run: for f in test/*.test.mjs; do echo "::group::$f"; node "$f"; echo "::endgroup::"; done
       # tools/check.mjs is the layering gate (the page must not import the build-time searcher

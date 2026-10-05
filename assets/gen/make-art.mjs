@@ -30,8 +30,9 @@ import {
   CAM_DEFAULT, FACE_COLOR, PLASTIC, STICKER_LIFT, STICKER_SIZE, quadPoints, stickerFaces, toViewPoint,
 } from '../../js/view.js';
 import {
-  blendPixel, createCanvas, downsample, fillPoly, fillRect, hex, readPng, rgba, shade, writePng,
+  blendPixel, createCanvas, downsample, encodePng, fillPoly, fillRect, hex, readPng, rgba, shade, writePng,
 } from './png.mjs';
+import { readIcns, readIco, writeIcns, writeIco } from './containers.mjs';
 import { drawText, textWidth } from './font5x7.mjs';
 import { grain } from './noise.mjs';
 
@@ -163,6 +164,7 @@ function vGradient(cv, x, y, w, h, from, to, coverage = 1) {
 // ---- emit ----------------------------------------------------------------------------
 
 const OUT = [];
+const DESKTOP = [];
 
 // Measured from the bytes on disk, because every dimension check in the world passed while
 // icons/icon-maskable-512.png was 81% transparent — the one thing a maskable tile may never be.
@@ -358,6 +360,40 @@ for (const [side, ss] of [[96, 3], [128, 3], [180, 3], [192, 3], [256, 2], [384,
   emit('assets/tex/spark-64.png', cv, { kind: 'sprite' });
 }
 
+
+// 7. the desktop containers: an Electron build wants build/icon.icns for macOS, build/icon.ico for
+//    Windows and build/icon.png for the Linux window manager. Without them the game installs with
+//    the generic Electron icon — a real product shipping with somebody else's artwork on the Dock.
+//    These are the PNGs above put in a container, never a second drawing of the motif, so the
+//    desktop icon and the browser tab cannot drift apart.
+{
+  const pngOf = (rel) => fs.readFileSync(path.join(ROOT, rel));
+  const at24 = appIcon(24, 4);
+  const ico = writeIco(path.join(ROOT, 'build/icon.ico'), [
+    { png: pngOf('icons/favicon-16.png') },
+    { png: Buffer.from(encodePng(at24.w, at24.h, at24.data)) },
+    { png: pngOf('icons/favicon-32.png') },
+    { png: pngOf('icons/favicon-48.png') },
+    { png: pngOf('icons/favicon-64.png') },
+    { png: pngOf('icons/icon-128.png') },
+    { png: pngOf('icons/icon-256.png') },
+  ]);
+  const icns = writeIcns(path.join(ROOT, 'build/icon.icns'), [
+    { side: 32, png: pngOf('icons/favicon-32.png') },
+    { side: 64, png: pngOf('icons/favicon-64.png') },
+    { side: 128, png: pngOf('icons/icon-128.png') },
+    { side: 256, png: pngOf('icons/icon-256.png') },
+    { side: 512, png: pngOf('icons/icon-512.png') },
+    { side: 1024, png: pngOf('icons/icon-1024.png') },
+  ]);
+  fs.copyFileSync(path.join(ROOT, 'icons/icon-512.png'), path.join(ROOT, 'build/icon.png'));
+  DESKTOP.push(
+    { rel: 'build/icon.ico', what: `${ico.count} sizes: ${ico.sizes.join(' ')}` },
+    { rel: 'build/icon.icns', what: `${icns.icons.length} chunks: ${[...new Set(icns.icons.map((i) => i.side))].join(' ')}` },
+    { rel: 'build/icon.png', what: '512 (Linux window manager)' },
+  );
+}
+
 // ---- self-check ----------------------------------------------------------------------
 
 console.log('assets/gen/make-art.mjs  (camera ' + JSON.stringify(CAM_DEFAULT) + ', palette from js/view.js)');
@@ -373,5 +409,11 @@ for (const o of OUT) {
   if (!ok) bad++;
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${o.rel.padEnd(32)} ${String(w)}x${String(h)}  ${String(o.bytes).padStart(7)} B  ${o.kind.padEnd(10)} solid=${o.coverage.padEnd(6)} motif_r=${String(o.motifR).padStart(4)} act=${o.activity}`);
 }
-console.log(`${OUT.length - bad}/${OUT.length} bitmaps verified, 0 failures expected`);
+for (const d of DESKTOP) {
+  const buf = fs.readFileSync(path.join(ROOT, d.rel));
+  const ok = buf.length > 1024;
+  if (!ok) bad++;
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${d.rel.padEnd(32)} ${String(buf.length).padStart(7)} B  ${d.what}`);
+}
+console.log(`${OUT.length + DESKTOP.length - bad}/${OUT.length + DESKTOP.length} bitmaps verified, 0 failures expected`);
 if (bad) process.exitCode = 1;

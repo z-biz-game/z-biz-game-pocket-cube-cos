@@ -1,5 +1,6 @@
 // Desktop shell: the game is a browser build, so Electron serves it over the same
 // zero-dependency static server instead of file:// (ES module imports need an origin).
+const path = require('node:path');
 const { app, BrowserWindow } = require('electron');
 const { startServer } = require('../server.cjs');
 
@@ -12,6 +13,10 @@ async function createWindow() {
     minWidth: 780,
     minHeight: 600,
     backgroundColor: '#101217',
+    // The window's own chrome takes its icon from the same generated tiles the web build ships:
+    // without it, Windows and Linux show the generic Electron icon in the taskbar and alt-tab.
+    // macOS ignores this field and uses the bundle icon (build/icon.icns) instead.
+    icon: path.join(__dirname, '..', 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     title: '魔方袖珍 Pocket Cube',
     autoHideMenuBar: true,
     webPreferences: {

@@ -12,6 +12,7 @@ import { dirname, resolve, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, run, ok, eq } from '../tools/harness.mjs';
 import { readPng } from '../assets/gen/png.mjs';
+import { readIcns, readIco } from '../assets/gen/containers.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
@@ -216,6 +217,38 @@ test('each bitmap is a readable picture for the role its name claims', () => {
   const sprite = measure('assets/tex/spark-64.png');
   ok(sprite.centre >= 150, `particle sprite centre alpha ${sprite.centre}: too faint to read as a dot`);
   ok(sprite.corners === 0, 'particle sprite must fade to nothing at its edge');
+});
+
+// The desktop shell is part of this product (package.json has an electron main and a build block),
+// and a packaged Electron app with no icon ships wearing Electron's own artwork. So the containers
+// are checked the same way the PNGs are: parsed, and compared byte for byte against the tiles the
+// web build ships — a stale .icns that no longer matches icons/icon-512.png is exactly the drift a
+// "已生成桌面图标" checkbox hides.
+test('the desktop containers hold the shipped tiles, and the shell points at them', () => {
+  const main = read('electron/main.cjs');
+  ok(/icon:\s*path\.join\(/.test(main), 'electron/main.cjs creates its window without an icon: taskbar gets Electron\'s artwork');
+  for (const rel of ['build/icon.ico', 'build/icon.icns', 'build/icon.png']) {
+    ok(existsSync(join(ROOT, rel)), `${rel} is missing`);
+  }
+
+  const ico = readIco(join(ROOT, 'build/icon.ico'));
+  eq(ico.sizes, [16, 24, 32, 48, 64, 128, 256], 'the .ico does not carry the size ladder Windows picks from');
+  const png = (rel) => readFileSync(join(ROOT, rel));
+  // 24px exists only inside the container, so the rest of the ladder has to be the same bytes.
+  eq(ico.pngs[0].equals(png('icons/favicon-16.png')), true, '.ico 16px is not icons/favicon-16.png');
+  eq(ico.pngs[6].equals(png('icons/icon-256.png')), true, '.ico 256px is not icons/icon-256.png');
+
+  const icns = readIcns(join(ROOT, 'build/icon.icns'));
+  const byType = new Map(icns.icons.map((i) => [i.type, i]));
+  for (const [type, side, src] of [['ic11', 32, 'icons/favicon-32.png'], ['ic07', 128, 'icons/icon-128.png'], ['ic08', 256, 'icons/icon-256.png'], ['ic09', 512, 'icons/icon-512.png'], ['ic10', 1024, 'icons/icon-1024.png']]) {
+    const chunk = byType.get(type);
+    ok(chunk, `no ${type} (${side}px) chunk in build/icon.icns`);
+    if (chunk) {
+      eq(chunk.side, side, `${type} payload is ${chunk.side}px, not ${side}`);
+      eq(chunk.png.equals(png(src)), true, `${type} is not the bytes of ${src}`);
+    }
+  }
+  eq(readPng(join(ROOT, 'build/icon.png')).w, 512, 'build/icon.png (Linux) is not the 512 tile');
 });
 
 // og:image with a relative path is a card with no picture: crawlers resolve it against their own
