@@ -12,21 +12,35 @@
 // Bump CACHE on any change worth forcing. Stale versions are deleted on activate, so an update is
 // one string, not a migration.
 
-const CACHE = 'pocketcube-v2';
+const CACHE = 'pocketcube-v3';
+// The page's own transitive import graph, plus the bitmaps its first paint needs. Both halves were
+// hand-maintained here once and both had drifted: `js/core/bfs.js` and `js/core/ida.js` are
+// build-time modules that js/main.js never imports, while `js/core/game.js` — the game itself —
+// together with `js/core/rng.js` and `js/data/lots.js` were missing, so an installed game opening
+// offline got a shell without the thing to play. This list is checked against the real graph by
+// test/shell.test.mjs, which turns that drift into a red test instead of a player's blank board.
 const SHELL = [
   './',
   './index.html',
+  './manifest.webmanifest',
   './css/game.css',
   './js/main.js',
   './js/view.js',
   './js/audio.js',
+  './js/core/game.js',
   './js/core/geom.js',
   './js/core/cube.js',
-  './js/core/bfs.js',
-  './js/core/ida.js',
   './js/core/library.js',
+  './js/core/rng.js',
   './js/core/storage.js',
-  './manifest.webmanifest',
+  './js/data/lots.js',
+  './icons/favicon-32.png',
+  './icons/favicon-48.png',
+  './icons/apple-touch-icon.png',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './assets/tex/blueprint-256.png',
+  './assets/tex/spark-64.png',
 ];
 
 self.addEventListener('install', (event) => {
