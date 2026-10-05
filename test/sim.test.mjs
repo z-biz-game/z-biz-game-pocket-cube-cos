@@ -21,7 +21,9 @@
 
 import { test, run, ok, eq } from '../tools/harness.mjs';
 import { solvedState } from '../js/core/cube.js';
-import { createView } from '../js/view.js';
+import { byId, campaign } from '../js/core/library.js';
+import { createGame, turn } from '../js/core/game.js';
+import { CAM_DEFAULT, createView } from '../js/view.js';
 import { createCanvasStub, createImageStub, createRafQueue } from './fake-canvas.mjs';
 
 // view.js's private step, re-declared rather than imported: if the module changes it, the
@@ -256,6 +258,128 @@ test('the particle sprite is drawn when it arrives, and the arc only stands in b
   ok(canvas.__ops.drawImage >= arcs, `sprite loaded but only ${canvas.__ops.drawImage} drawImage calls`);
   eq(canvas.__ops.arc, 0, 'the fallback still ran after the sprite arrived');
   ok(view.sim.sparks > 0, 'the splash drained during the swap');
+});
+
+// The row the official frame probe could not produce for this repo (it dies on
+// `Cannot use import statement outside a module` and reports 结论：无法比对): a level actually
+// played, turned by dispatched pointer events rather than by a call into a private function,
+// compared at identical sim step counts across three display rates. Everything above pins the
+// view's clock; this pins the thing a player is inside.
+test('a level played through real pointer events lands identically at 30, 60 and 120 Hz', () => {
+  const HZ = [{ hz: 30, stepsPerFrame: 4 }, { hz: 60, stepsPerFrame: 2 }, { hz: 120, stepsPerFrame: 1 }];
+  // Multiples of 4, the 30 Hz batch size, so every rate lands on this exact step count rather than
+  // on "the first frame that got past it" — which is itself a frame-rate-dependent quantity.
+  // 12 (0.1 s) is still mid-turn-animation; 60 and 96 are on the splash's falling leg. Not 8/16/32:
+  // a burst starts at `vy = sin(a)*speed - 120` against 620 px/s² of gravity, so the mean particle
+  // does not turn downward until 0.39 s — comparing there would assert a physics lie.
+  const CHECK = [12, 60, 96];
+  const playLevel = (rate) => {
+    const dom = installDom();
+    // Before createView: the view chooses its input flavour the moment it binds, and a flavour
+    // declared afterwards would leave pointerdown bound to nothing.
+    globalThis.PointerEvent = function PointerEvent() {};
+    const game = createGame(byId(campaign()[3].id));
+    const canvas = createCanvasStub({
+      width: 640, height: 640, rect: { left: 0, top: 0, width: 320, height: 320 },
+    });
+    const view = createView(canvas, {
+      // js/main.js's commit path: turn, animate what the turn did, splash if the cube is solved.
+      onCommit: (move) => {
+        if (!turn(game, move)) return;
+        view.animate(move);
+        if (game.done) view.burst(46);
+      },
+    });
+    view.measure();
+    view.attach(game);
+    view.start();
+    // Every gesture is dispatched before the first frame is fed. Firing them on a step boundary
+    // *inside* the pump loop would quantise the input to the frame — a 30 Hz frame pays 4 steps, so
+    // its burst would be born two steps later than a 120 Hz one — and the comparison would then be
+    // about when the finger arrived rather than how the simulation integrates. That is a ruler
+    // artefact, and it reads as a false red.
+    for (let i = 1; i <= 6; i++) {
+      if (i === 3) {
+        canvas.dispatch('pointerdown', { clientX: 6, clientY: 6, pointerId: 7 });
+        canvas.dispatch('pointermove', { clientX: 126, clientY: 26, pointerId: 7 });
+        canvas.dispatch('pointerup', { clientX: 126, clientY: 26, pointerId: 7 });
+        continue;
+      }
+      // Slot 7 stops being pressable once a few turns have moved a nearer cubie in front of it, so
+      // the walk takes the first sticker the renderer offers. `pressable` is deliberately NOT a
+      // precondition: with a turn animation still mid-paint the painted quad and the model's end
+      // state disagree, and a real finger arrives mid-animation too. Which sticker each press lands
+      // on is irrelevant to this test — all three rates walk the same slot order over the same
+      // cube, so they land on the same one, and the per-field diff below is what proves it.
+      const d = [7, 0, 1, 2, 3, 4, 5, 6].map((s) => view.bestDragFor(s)).find(Boolean);
+      ok(d, `gesture ${i}: the cube offered no drag at all`);
+      canvas.dispatch('pointerdown', { clientX: d.from.x, clientY: d.from.y, pointerId: 7 });
+      canvas.dispatch('pointermove', { clientX: d.to.x, clientY: d.to.y, pointerId: 7 });
+      canvas.dispatch('pointerup', { clientX: d.to.x, clientY: d.to.y, pointerId: 7 });
+      view.burst(18); // the splash the win path fires, on the same clock
+      view.draw(); // `picked`, the quads the next press hit-tests against, is rebuilt in draw()
+    }
+    ok(game.moves >= 1 && game.moves <= 5, `${game.moves} turns committed from at most 5 drags`);
+    const ms = frameMs(rate);
+    let ts = 1000;
+    let frames = 0;
+    const hit = new Map();
+    const at = () => {
+      const s = view.sim;
+      return {
+        moves: game.moves,
+        done: game.done,
+        cube: JSON.stringify(game.state),
+        yaw: Math.round(view.viewAngles.yaw * 1e4) / 1e4,
+        clock: s.clock,
+        animMove: s.animMove,
+        sparks: s.sparks,
+        sparkSumY: s.sparkSumY,
+        sparkSumLife: s.sparkSumLife,
+        // Per particle, not a sum: the cull of short-lived sparks shrinks the sum on its own, so
+        // only the mean can say whether gravity moved the splash.
+        meanY: s.sparks ? Math.round((s.sparkSumY / s.sparks) * 1e3) / 1e3 : 0,
+        spark0: JSON.stringify(s.spark0),
+      };
+    };
+    while (frames < 6000) {
+      frames += 1;
+      ts += ms;
+      dom.queue.pump(ts);
+      for (const c of CHECK) if (!hit.has(c) && view.sim.steps >= c) hit.set(c, at(c));
+      if (hit.size === CHECK.length) break;
+    }
+    return { rate, hit, game, view };
+  };
+
+  const runs = HZ.map((rate) => playLevel(rate));
+  for (const r of runs) ok(r.game.moves > 0, `${r.rate.hz} Hz never turned the cube`);
+  const bad = [];
+  for (const c of CHECK) {
+    const ref = runs[0].hit.get(c);
+    ok(ref, `30 Hz never reached step ${c}`);
+    for (const r of runs.slice(1)) {
+      const got = r.hit.get(c);
+      if (!got) { bad.push({ c, hz: r.rate.hz, why: 'never reached' }); continue; }
+      if (JSON.stringify(ref) !== JSON.stringify(got)) bad.push({ c, hz: r.rate.hz, ref, got });
+    }
+  }
+  eq(bad, [], 'the level you are inside moved with the frame rate');
+  // Guards against a vacuous comparison. The gestures are all committed before the first frame, so
+  // `moves` is flat by design; what has to differ between checkpoints is everything the simulation
+  // integrates, and what has to differ from a solved cube is the state the pointer path produced.
+  const [early, mid, late] = CHECK.map((c) => runs[0].hit.get(c));
+  const start = JSON.stringify(runs[0].game.start);
+  ok(late.cube !== start, 'five pointer gestures left the cube exactly as the level started it');
+  ok(early.yaw !== CAM_DEFAULT.yaw, 'the orbit gesture never reached the camera');
+  ok(early.animMove >= 0, 'the turn animation was never live at 12 steps');
+  eq(mid.animMove, -1, 'the turn animation outlived its own budget');
+  ok(late.sparks > 0 && late.sparks < mid.sparks, `the splash neither survived nor culled: ${mid.sparks} -> ${late.sparks}`);
+  ok(mid.meanY > early.meanY && late.meanY > mid.meanY, `gravity should drag the splash down (canvas y grows downward): ${early.meanY} / ${mid.meanY} / ${late.meanY}`);
+  ok(mid.sparkSumLife < early.sparkSumLife, 'lives should be draining');
+  const fields = Object.keys(early);
+  const moved = fields.filter((f) => new Set(CHECK.map((c) => JSON.stringify(runs[0].hit.get(c)[f]))).size > 1);
+  ok(moved.length >= 3, `only [${moved.join(', ')}] changed across the checkpoints — the sim was compared against itself`);
 });
 
 run();
