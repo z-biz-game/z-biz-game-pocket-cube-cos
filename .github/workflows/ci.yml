@@ -38,7 +38,7 @@ jobs:
       - name: Syntax
         run: npm run check
       - name: Suites
-        run: for f in test/*.test.mjs; do echo "::group::$f"; node "$f"; echo "::endgroup::"; done
+        run: npm run unit
       # tools/check.mjs is the layering gate (the page must not import the build-time searcher
       # layer, js/core must not touch the DOM, every relative import must resolve). verify.sh runs
       # it, and the browser job runs verify.sh with SKIP_UNIT=1 — which skips exactly this file —
