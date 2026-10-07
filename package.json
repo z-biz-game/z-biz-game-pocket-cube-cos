@@ -13,7 +13,8 @@
     "proof": "node tools/proof.mjs",
     "check": "for f in js/*.js js/*/*.js server.cjs electron/main.cjs tools/*.mjs test/*.mjs; do node --check \"$f\" || exit 1; done && echo OK",
     "unit": "ok=1; for f in test/*.test.mjs; do node \"$f\" || ok=0; done; [ \"$ok\" = 1 ] || exit 1",
-    "test": "npm run check && npm run unit",
+    "test": "npm run check && npm run unit && node tools/docs-test.mjs",
+    "doctest": "node tools/docs-test.mjs",
     "verify": "bash tools/verify.sh",
     "deploy-set": "node tools/deploy-set.mjs",
     "deploy-set:selftest": "node tools/deploy-set-selftest.mjs"

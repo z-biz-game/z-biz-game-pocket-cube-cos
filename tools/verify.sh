@@ -129,6 +129,10 @@ if [ -z "${SKIP_UNIT:-}" ]; then
   # did not exist — the gate was referenced by a script that quietly skipped it and printed green.
   echo "--- tools/check.mjs"
   node tools/check.mjs || FAILED=1
+  # 文档行号对账：README / DESIGN / deliverable 里印着的每一个 `path:行号` 都读回来对账。
+  # npm test 的链与 CI 的 unit job 跑的是同一条命令（不是两份清单），这一条不碰 Chrome。
+  echo "--- tools/docs-test.mjs"
+  node tools/docs-test.mjs || FAILED=1
 else
   echo "(skipped: SKIP_UNIT=1)"
 fi

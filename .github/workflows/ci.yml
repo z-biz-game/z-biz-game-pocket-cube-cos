@@ -45,6 +45,10 @@ jobs:
       # so without this step the repo's one architectural rule would be enforced nowhere in CI.
       - name: Layering
         run: node tools/check.mjs
+      # 文档行号对账：README / DESIGN / deliverable 里印着的每一个 `path:行号` 都读回来对账。
+      # 本地整闸与 npm test 的链里跑的是同一条命令，不是两份清单。
+      - name: Doc citations reconcile (文档行号对账)
+        run: node tools/docs-test.mjs
       # 部署集闸：按 tools/assemble-site.sh 那份清单真拷一遍产物，要求页面会去要的东西
       # 都在里面。这一仓曾经因为清单落后于页面而线上 404 自己的 manifest/sw.js/图标，
       # 而本地一切全绿——因为本地根本没有「按清单拷」这一步。

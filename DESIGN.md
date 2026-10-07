@@ -40,7 +40,7 @@ all 15 per-distance counts match OEIS A080630, and they sum to 88179840
 1. **全群扫描**：84.1 MB、约 5 秒 CPU，只在 `tools/bake.mjs` 里跑。`js/main.js` 不 import
    `fullsweep.js`、`bfs.js`、`ida.js`、`pdb.js`、`make.js`（`grep -n "import" js/main.js` 可复现），
    Pages 部署的是文件拷贝，所以这些模块**也不在产物里被加载**。
-2. **前端的一次查表**：`js/core/game.js:121` 的 `hint()` 读一张 `routeMap(lot)`（按 `encode(state)`
+2. **前端的一次查表**：`js/core/game.js:126` 的 `hint()` 读一张 `routeMap(lot)`（按 `encode(state)`
    索引的 Map，构建一关时最多 `par+1` 个键）。玩家怎么点都不会让搜索变深，因为它不是搜索。
 3. **偏离路线时**：`hint()` 返回 `{available: false, reason: 'off-route'}` 并给出一句人话，
    **不去现场求解**。这条是设计意图而不是偷懒：现编一个"最优下一步"就是契约禁止的那种数字。
@@ -81,7 +81,7 @@ sum(twist) mod 3 unchanged by every turn  0 violations`）；`js/core/fullsweep.
 | 易错点 | 为什么看起来对 | 后果 | 现在的钉 |
 | --- | --- | --- | --- |
 | 手抄转块表（把某个面的顺/逆时针写反） | 六张 4-循环看起来"背得下来" | **距离分布不变**（生成集里同时含正反向，图同构），所以直径/直方图/外部对账**全都抓不到**；只有"这一转叫什么名字"错了——屏幕说 R 干的是 R' 的活 | `js/core/geom.js` 不从记忆抄：`rotationMatrix(法线, ±1)` 的 Rodrigues 公式推 `to/from/delta`；`test/geom.test.mjs` 用一套**手抄的六行循环表**去比对引擎（U/D/R/F/B 五行通过、**L 那一行方向写反了**，见 §7.4 与 deliverable §2#1） |
-| 把整体旋转当成一步（或当成免费） | 2×2×2 拿在手里转一下很自然 | 若把 `isSolved` 放宽成"任意朝向已解"，`par` 立刻变成 `q`，与 A080630 对不上 | `cube.isSolved()` 只认参考朝向；`game.js:71` 的 `view:{yaw,pitch}` 明确写着"观察不是状态"，`view.js` 的空白处拖动不改 `moves`（`@pointer` 有两条专门验：shift 拖之后 `moves === 0` 而画面动了，且转身后的第一拖仍落在它声称的那一面，见 §7.3） |
+| 把整体旋转当成一步（或当成免费） | 2×2×2 拿在手里转一下很自然 | 若把 `isSolved` 放宽成"任意朝向已解"，`par` 立刻变成 `q`，与 A080630 对不上 | `cube.isSolved()` 只认参考朝向；`js/core/game.js:71` 的 `view:{yaw,pitch}` 明确写着"观察不是状态"，`view.js` 的空白处拖动不改 `moves`（`@pointer` 有两条专门验：shift 拖之后 `moves === 0` 而画面动了，且转身后的第一拖仍落在它声称的那一面，见 §7.3） |
 | 编码/解码不对称（第八个 trit 手算错） | `decode` 里 `(3 − sum%3)%3` 与 `encode` 拒绝非 0 残差，两处分开写 | `parity` 类 bug 会让"随机 rank 生成的合法态"有一多半不可解，bake 表现为接受率塌掉 | `js/core/cube.js:222-242` 一对互逆函数；`tools/proof.mjs` 的 `decode then encode is the identity, first 4000 and last 2186 ranks`（实跑 0 broken）——注意这一项**曾经是这个函数里最后一条被打印出来的**：后半段用到没 import 的 `rankTo8`，`ReferenceError` 把它之后的所有锚点全部变成"没跑"，见 §7.4#2 |
 
 `cube.applyInto`（原地，给搜索器省分配）与 `cube.apply`（纯函数，返回新状态）是**两个**函数，
@@ -118,7 +118,7 @@ tangle  par 12-14 23.763%               walk 21/22 turns
 3. **接受率是量出来的，并且它决定策略选择**。均匀撒点（`rank`）在 first 档上的理论接受率就是
    0.279%，即每 358 个候选收 1 个；`walk` 策略实测（本批）22 试 16 收 = 72.73%、
    warm 31/16 = 51.61%、spin 62/16 = 25.81%、tangle 76/16 = 21.05%。
-   `js/core/make.js:139` 的 `makeBand` 带 `cap`（`Math.max(4000, count*400)`），
+   `js/core/make.js:143` 的 `makeBand` 带 `cap`（`Math.max(4000, count*400)`），
    跑不完预算时 `stats.truncated` 让 `tools/bake.mjs:219` 直接失败，不是打一条日志继续。
 
 **生成包络 vs 已发布落成**是两栏，不是一栏（Gridlock 抄错过的那格）：`TIERS_META.min/max` 是带定义的
@@ -135,7 +135,7 @@ tangle  par 12-14 23.763%               walk 21/22 turns
 
 oracle 有两种，这是本仓一个真实的设计分层：
 
-- `bfsOracle()`（`make.js:78`）——真的搜。默认值，这样"没有烘焙表"时模块仍然诚实。
+- `bfsOracle()`（`js/core/make.js:78`）——真的搜。默认值，这样"没有烘焙表"时模块仍然诚实。
 - `sweepOracle`（`tools/bake.mjs:91` 注入）——一次数组读，外加 `routeFromTable`。
   它同时返回 `states = cum[par]`：**"这张表要扫到多少个状态才敢给这么深的 par"**，
   每关的 `states` 字段就是这个数（本批 7,590 … 88,173,216），查表本身把这件事藏起来，所以印出来。
@@ -186,7 +186,7 @@ IDA\* 的启发是**三项取 max**（`js/core/ida.js`）：单角块 24 结点�
 
 ## 6. 画面：手势到"哪一面转"只有一个函数
 
-`js/view.js` 的语义核心是 `dragTurn(slot, n, u)`（`:68`）：按住的贴纸法线 `n`、拖动切线 `u`，
+`js/view.js` 的语义核心是 `dragTurn(slot, n, u)`（`js/view.js:68`）：按住的贴纸法线 `n`、拖动切线 `u`，
 转轴 `a = cross(n, u)`（**顺序就是这个**：`a` 是右手系下把 `n` 带到 `u` 的那个轴，
 `rotationMatrix(a, +1) n = a x n = u`）；再取该角块在 `a` 轴上的符号 `e`，
 `a[i] === e` 就是这层面朝外那一侧 ⇒ 用 `cwTurnOf(m) ^ 1`，否则用 `cwTurnOf(m)`。
@@ -202,7 +202,7 @@ IDA\* 的启发是**三项取 max**（`js/core/ida.js`）：单角块 24 结点�
 
 其余几条不是风格：
 
-- `DRAG_THRESHOLD = 16` css px（`:35`）：**越过阈值只提交一次**，不许连转；反向拖 = 反向转。
+- `DRAG_THRESHOLD = 16` css px（`js/view.js:35`）：**越过阈值只提交一次**，不许连转；反向拖 = 反向转。
   台架里必须有一条"小拖动不提交"，否则一次滑动 = 三次转会静默毁掉 par 的意义。
 - 拖空白处改 `game.view.yaw/pitch`，**不产生 `moves`**。这是 §2 第二条易错点的画面侧。
 - 提交顺序：状态**只**在 `game.turn()` 里变一次，动画是把被转的那层按 `(1 − progress)` 的**逆旋转**画出来，
@@ -211,7 +211,7 @@ IDA\* 的启发是**三项取 max**（`js/core/ida.js`）：单角块 24 结点�
 - `canvas.getContext('2d', { willReadFrequently: true })`：台架要用 `getImageData` 回读像素证明
   "合法拖动改变画面、小拖动不改变"，没这个标志 Chrome 每次回读打一条 warning，会淹没"console 干净"那条断言。
 - 给台架用的坐标原语：`stickerPoint(slot,k)` / `dragsFor(slot,k)` / `pointAt(slot)` / `cellPoint(x,y)`
-  （`:472-492`）。CDP 派真实鼠标事件只能靠它们拿到像素坐标。
+  （`js/view.js:486-505`）。CDP 派真实鼠标事件只能靠它们拿到像素坐标。
 
 ---
 
@@ -318,7 +318,7 @@ bash tools/verify.sh         → 60 + 90 行, 0 失败, 量级 25–29 s（观�
   定义是 `moves ≤ par`（`js/core/game.js:145`），与手速无关。
 - **不做浏览器内重烤池子**：`tools/bake.mjs`/`survey.mjs` 是构建期工具，shipped 代码不 import。
 - **不做成就 / 排行榜 / 签到 / 云存档 / 分享战绩**（组织 E 组禁令）。分享只有 `#/lot/<id>` 与
-  `#/cube/<打乱公式>`，分享的是谜题本身，不含分数；后者**故意不携带 par**（`library.js:87-105`）。
+  `#/cube/<打乱公式>`，分享的是谜题本身，不含分数；后者**故意不携带 par**（`js/core/library.js:87-105`）。
 - **无图片 / 音频 / 字体 / 打包器 / npm 依赖**：八个立方体由 `js/view.js` 程序绘制，二进制资产 0 个。
 - **不为了"绿"去改期望值**。§7.4 那三条现在都是红的/崩的，本仓的处理方式是**登记**，
   不是放宽断言，也不是顺手把 `geom.js` 改成迎合手抄表。
