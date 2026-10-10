@@ -116,6 +116,11 @@ if [ -z "${SKIP_UNIT:-}" ]; then
     echo "--- $f"
     node "$f" || FAILED=1
   done
+  # 部署集闸：ci.yml 跑这两步、本地整闸以前一次都不跑。缺这一步就是「本地全绿、线上 404 自己的
+  # manifest / sw.js / 图标」这一整类坏法。它不碰 Chrome，也不读页面，纯查产物。
+  echo "=== deploy-set ==="
+  node tools/deploy-set.mjs || FAILED=1
+  node tools/deploy-set-selftest.mjs || FAILED=1
   # tools/check.mjs is the layering gate: no dependencies, no DOM and no clock inside js/core,
   # no import that points at a file that is not there. The suites cannot see any of that, because
   # a suite only ever reads the files it imports itself.
@@ -124,6 +129,10 @@ if [ -z "${SKIP_UNIT:-}" ]; then
   # did not exist — the gate was referenced by a script that quietly skipped it and printed green.
   echo "--- tools/check.mjs"
   node tools/check.mjs || FAILED=1
+  # 文档行号对账：README / DESIGN / deliverable 里印着的每一个 `path:行号` 都读回来对账。
+  # npm test 的链与 CI 的 unit job 跑的是同一条命令（不是两份清单），这一条不碰 Chrome。
+  echo "--- tools/docs-test.mjs"
+  node tools/docs-test.mjs || FAILED=1
 else
   echo "(skipped: SKIP_UNIT=1)"
 fi
