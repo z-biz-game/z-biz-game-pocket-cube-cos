@@ -12,6 +12,10 @@ import { ALL, TIERS, byId, dailyLot, fromScramble, levelAt, lotsIn, notation, ra
 import { todayKey } from './core/rng.js';
 import { store } from './core/storage.js';
 import { createView } from './view.js';
+// 听觉与触觉这两路反馈：视觉与数值之外，桌面上还该有"听得见"的一路。
+// 音频模块自己管手势解锁与真静音（suspend），这里只管把音接到真实事件上。
+import { audio } from './audio.js';
+import { haptics } from './haptics.js';
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -188,25 +192,36 @@ function render() {
 
 // The one place a turn happens: a drag from the view, a hint follow, and the test rig's
 // play() all arrive here, so the counter, the cube and the save line cannot drift apart.
+//
+// 声音接在这条路径上，因为这条路径上发生的是**真实事件**：
+//   · 引擎拒了这一转 → wrong（规则不成立，壳层只是把理由念出来）
+//   · 引擎认了这一转 → correct（一次有效操作成功）
+//   · 魔方复原 → win（在 finish 里）
 function commit(move) {
   if (!turn(app.game, move)) {
+    audio.play('wrong');
+    haptics.wrong();
     view.redraw();
     return false;
   }
   app.lastMove = move;
   view.animate(move);
   if (app.game.done) {
-    finish();
-  } else {
-    renderCrumbs();
-    say(`转了 <b>${MOVES[move].name}</b> · 已用 ${app.game.moves} 步${app.lot.par == null ? '' : ` · 超出 ${overPar(app.game)}`}`);
+    finish();                      // 收官那一响是 win，在 finish 里
+    haptics.correct();
+    return true;
   }
+  audio.play('correct');           // 一次有效操作成功
+  haptics.correct();
+  renderCrumbs();
+  say(`转了 <b>${MOVES[move].name}</b> · 已用 ${app.game.moves} 步${app.lot.par == null ? '' : ` · 超出 ${overPar(app.game)}`}`);
   return true;
 }
 
 function finish() {
   const lot = app.lot;
   const g = app.game;
+  audio.play('win');               // 魔方复原了
   const measured = lot.par !== null && lot.par !== undefined;
   // A cube with no measured par is a solve, not a perfect run: passing the player's own count
   // as the par would make every hand-typed scramble perfect by definition.
@@ -282,6 +297,7 @@ el.modes.addEventListener('click', (ev) => {
 
 el.undo.addEventListener('click', () => {
   if (!undo(app.game)) return;
+  audio.play('move');            // 撤销一步：盘面退了一步
   app.lastMove = null;
   el.curtain.hidden = true;
   view.redraw();
@@ -295,9 +311,11 @@ el.hint.addEventListener('click', () => {
   store.countHint();
   if (!h.available) {
     say(h.reason === 'solved' ? '已经复原了，没有下一步可提示' : h.message || '偏离了认证路线');
+    audio.play('wrong');
     renderCrumbs();
     return;
   }
+  audio.play('move');            // 提示：只点一步，不代转
   view.showHint(h.move);
   say(`提示：转 <b>${h.name}</b> —— 之后还需 <b>${h.left}</b> 转${onRoute(app.game) ? '' : '（先撤销回路线上）'}`);
   renderCrumbs();
@@ -559,4 +577,27 @@ window.pocketcube = {
   window.addEventListener('webkitfullscreenchange', sync);
   window.addEventListener('MSFullscreenChange', sync);
   sync();
+})();
+
+// ---- 音效开关（#btn-sound）----
+//
+// 静音走 `audio.setMuted(true)`，那是 `ctx.suspend()`：整个 AudioContext 挂起。
+// **不许**改成像"把 master.gain 拧到 0"那样 —— 只拧 gain 是假静音：节点照建、时钟照跑，
+// 取消静音之后还有一截尾巴在响。真正的静音必须是挂起整个上下文。
+//
+// 按钮找不到就不装（和全屏那一条同一条纪律）：留一串没人按的代码等于没做这个功能。
+(function bindSound() {
+  const btn = document.getElementById('btn-sound');
+  if (!btn) return;
+  function paint() {
+    const on = !audio.muted;
+    btn.setAttribute('aria-pressed', String(on));
+    btn.textContent = on ? '音效：开' : '音效：关';
+    btn.title = on ? '点击关闭音效' : '点击开启音效';
+  }
+  btn.addEventListener('click', () => {
+    audio.setMuted(!audio.muted);
+    paint();
+  });
+  paint();
 })();
