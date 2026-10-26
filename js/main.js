@@ -13,6 +13,8 @@ import { todayKey } from './core/rng.js';
 import { store } from './core/storage.js';
 import { createView } from './view.js';
 import { createAudio } from './audio.js';
+// 触觉是第三路反馈：`navigator.vibrate` 在 iOS Safari 上不存在，模块自己会空操作。
+import { haptics } from './haptics.js';
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -296,6 +298,7 @@ el.modes.addEventListener('click', (ev) => {
 el.undo.addEventListener('click', () => {
   if (!undo(app.game)) return;
   audio.undo();
+  haptics.tap();
   app.lastMove = null;
   el.curtain.hidden = true;
   view.redraw();
@@ -314,6 +317,7 @@ el.hint.addEventListener('click', () => {
   }
   view.showHint(h.move);
   audio.hint();
+  haptics.tap();
   say(`提示：转 <b>${h.name}</b> —— 之后还需 <b>${h.left}</b> 转${onRoute(app.game) ? '' : '（先撤销回路线上）'}`);
   renderCrumbs();
 });

@@ -34,7 +34,7 @@ web **5199** / devtools **9359**，且 `tools/verify.sh:54-63` 在起跑前对�
 | 仓 | `/Users/zifang/workplace/ceo_workplace/z-biz-game/z-biz-game-pocket-cube-cos` | — |
 | 玩法一句话 | 2×2×2 魔方，用尽量少的**季度转**把六个面收回单一颜色 | `js/core/cube.js`（`isSolved`）、`js/core/game.js:158`（`grade`） |
 | 路由 | `#/c/<n>`、`#/campaign/<n>`、`#<n>`、`#/daily`、`#/random/<档>[/<种子>]`、`#/lot/<id>`、`#/cube/<打乱公式>` | `js/main.js` 的 `parseHash`；浏览器侧由 `@routes` 的 23 行断言（§5.5） |
-| 测试钩子 | `window.pocketcube`，定义在 `js/main.js:359` | `tools/playtest.mjs` 与 `tools/verify.sh` 驱动的就是它（第一轮时它们还在驱动上一仓的 `window.gridlock`） |
+| 测试钩子 | `window.pocketcube`，定义在 `js/main.js:377` | `tools/playtest.mjs` 与 `tools/verify.sh` 驱动的就是它（第一轮时它们还在驱动上一仓的 `window.gridlock`） |
 | 主张：`par` 从哪来 | 全群 `8!·3⁷ = 88,179,840` 个状态的穷尽 BFS 距离（一字节一格），逐层直方图与 **OEIS A080630** 逐行相同，直径 **14**、顶上 **6,624** 个状态 | `node tools/bake.mjs`（§4.1）、`node tools/proof.mjs` 的枚举段（§5.4） |
 | 第二证据（防自证） | 每关从**序列化之后的 `scrText`** 再独立解一遍：双向 BFS + IDA\*（五块 PDB），两个都必须等于印着的 `par`，解串回放必须回到已解态 | **`node test/library.test.mjs`** 的第 3 行 `every shipped par survives a re-solve by the reference solver`（§5.2，7.6 s，**在 CI 里**） |
 | 难度带是量出来的 | `4-6 / 7-9 / 10-11 / 12-14` = 全群 par 直方图的四段，占群 `0.279% / 13.863% / 62.094% / 23.763%`；本批**落成**是 `4-6 / 7-9 / 10-11 / 12-13` | `js/data/lots.js` 的 `TIERS_META`（`max` 与 `seen` 两栏并排）；`node -e 'import("./js/core/library.js").then(m=>console.log(m.stats()))'` |
@@ -62,7 +62,7 @@ web **5199** / devtools **9359**，且 `tools/verify.sh:54-63` 在起跑前对�
 | `index.html` | 壳：顶栏 / `#cube` 画布 / 右侧面板 / 通关卡；`<link rel="icon" href="data:,">`（`index.html:8`） | `@boot` 的 6 行（控件齐、画布不是未样式的 300×150、魔方真被画出来、rAF 在推进、一次重画推得动 frames、地址栏无 hash 也出第 1 关）＋ `@play` 的"卡片升起"（§5.5）。favicon 那条是给"console 干净"用的，现在确实有那条断言 |
 | `css/game.css` | 全部样式，单文件 | `@boot`（`#cube` 有真实像素）、`@pointer` 的坐标断言（样式把画布摆到哪儿，命中测试就得算到哪儿：`dragFor` 给的是 client 坐标，`box.left/top` 加了才发给 CDP） |
 | `js/view.js` | canvas 2D 自写投影、手势（拖面 = 转、拖空白 = 看）、`stickerPoint/dragsFor/pointAt/cellPoint`（`js/view.js:486-505`）、`dirty` 重绘标志（`js/view.js:108`、`js/view.js:417`、`js/view.js:451`）、`dragFor` 的 `pressable/under`（`js/view.js:324-340`） | **`test/view.test.mjs`**（5 行，node 层）：`dragTurn()` 对 96 个 (角块, 面, 拖动方向) 三元组逐个对**物理贴纸模型**，48 组反拖 = 逆转，一个贴纸恰好四拖 = 相邻两面的正反，转的是脚下那层。＋ `@pointer` 19 行（真鼠标事件，含 `pressable` 的往返断言，§2#16） |
-| `js/main.js` | 路由、DOM、存档写入、`window.pocketcube`（`js/main.js:359`）、`pickAt`（`js/main.js:453`）、只接受 `pressable` 的 `dragRoute`（`js/main.js:462`） | `@boot/@play/@routes/@save/@pointer` 全部 90 行；分层侧由 `tools/check.mjs` 第 4 行钉住"页面的模块闭包不许碰构建期层" |
+| `js/main.js` | 路由、DOM、存档写入、`window.pocketcube`（`js/main.js:377`）、`pickAt`（`js/main.js:471`）、只接受 `pressable` 的 `dragRoute`（`js/main.js:480`） | `@boot/@play/@routes/@save/@pointer` 全部 90 行；分层侧由 `tools/check.mjs` 第 4 行钉住"页面的模块闭包不许碰构建期层" |
 
 ### js/core/*（纯函数层，`node` 直接 import）
 
