@@ -7,8 +7,10 @@
 //
 // A grep for `pointerdown` can lie. A file that is not on disk cannot.
 
-import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs';
+import { readFileSync, existsSync, statSync, readdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { dirname, resolve, join, normalize } from 'node:path';
+import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { test, run, ok, eq } from '../tools/harness.mjs';
 import { readPng } from '../assets/gen/png.mjs';
@@ -271,19 +273,17 @@ test('the social card is an absolute URL whose bytes are on disk', () => {
   ok(new URL(tw[1]).pathname === cardPath, 'twitter:image points at a different card than og:image');
 });
 
-// The Pages artifact is the deployment: if a path is referenced and not copied, production 404s
-// while every local test passes. This is the row that would have caught the original bug.
-test('the Pages workflow copies every top-level path the shell references', () => {
-  const wf = read('.github/workflows/pages.yml');
-  const step = wf.match(/name: Assemble static site\n\s*run: \|([\s\S]*?)\n      - uses/);
-  ok(step, 'no "Assemble static site" step to read');
-  const copied = new Set();
-  for (const m of step[1].matchAll(/^\s*cp\s+(?:-r\s+)?(.+)$/gm)) {
-    for (const tok of m[1].trim().split(/\s+/)) if (tok !== '_site/') copied.add(tok.replace(/\/$/, ''));
-  }
+// The deploy artifact is the deployment: if a path is referenced and not copied, production 404s
+// while every local test passes. This is the row that would have caught the original bug. The copy
+// list lives in tools/assemble-site.sh — the one manifest Pages and tools/deploy-set.mjs both call —
+// so the test runs that script and looks at the directory it produces, instead of parsing a second
+// list transcribed into the workflow (that transcription is exactly how the two drifted apart).
+test('the deploy manifest copies every top-level path the page references', () => {
+  const site = mkdtempSync(join(tmpdir(), 'pc-shell-'));
+  execFileSync('bash', [join(ROOT, 'tools/assemble-site.sh'), site], { stdio: 'pipe' });
   // A path the shell reaches for that actually exists in the repo must be in the artifact. `sw.js`
-  // is not referenced by index.html at all (a worker registers itself from js/main.js), so it is
-  // added by hand — forgetting it is what makes an installed game never update.
+  // is not referenced by index.html at all (a worker registers itself from js/sw-register.js), so it
+  // is added by hand — forgetting it is what makes an installed game never update.
   const wanted = new Set(['index.html', 'manifest.webmanifest', 'sw.js']);
   for (const p of [...localRefs(), ...cssRefs(), ...manifestRefs().paths]) wanted.add(p.split('/')[0]);
   // An absolute og:image still names a file in this artifact, and a card that 404s is a card that
@@ -299,9 +299,10 @@ test('the Pages workflow copies every top-level path the shell references', () =
   }
   const dropped = [...wanted]
     .filter((p) => existsSync(join(ROOT, p)))
-    .filter((p) => !copied.has(p));
+    .filter((p) => !existsSync(join(site, p)));
   eq(dropped, [], `the artifact drops ${dropped.join(', ')} — those paths 404 on Pages`);
   ok([...wanted].some((p) => p === 'icons'), 'no icon directory was even collected to check');
+  rmSync(site, { recursive: true, force: true });
 });
 
 // The worker's promise is "an installed game opens offline". That is only true if the list it
@@ -312,8 +313,11 @@ test('the service worker primes the real runtime graph, not a hand-typed copy of
   const missing = graph.map((m) => `./${m}`).filter((p) => !shell.includes(p));
   eq(missing, [], `sw.js does not cache ${missing.join(', ')} — offline the page cannot start`);
   // A stale entry is not merely untidy: it makes `install` fetch a URL that no longer exists, and
-  // the allSettled call swallows the 404, so the drift is invisible from the console too.
-  const orphans = shell.filter((p) => p.startsWith('./js/') && !graph.map((m) => `./${m}`).includes(p));
+  // the allSettled call swallows the 404, so the drift is invisible from the console too. Classic
+  // scripts the page mounts itself (js/sw-register.js) are not in the import graph, so they count
+  // as reachable by their script tag rather than by `import`.
+  const pageScripts = localRefs().filter((p) => p.startsWith('js/')).map((p) => `./${p}`);
+  const orphans = shell.filter((p) => p.startsWith('./js/') && !graph.map((m) => `./${m}`).includes(p) && !pageScripts.includes(p));
   eq(orphans, [], `sw.js primes modules js/main.js never imports: ${orphans.join(', ')}`);
   for (const p of ['./index.html', './css/game.css', './manifest.webmanifest']) {
     ok(shell.includes(p), `sw.js does not prime ${p}`);

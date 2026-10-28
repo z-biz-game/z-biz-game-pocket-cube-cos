@@ -18,7 +18,9 @@ cd "$HERE" || exit 2
 cp index.html manifest.webmanifest sw.js "$DEST/"
 cp -r css js "$DEST/"
 # 位图目录名不统一（icons/ 与 assets/ 都在用）：按存在与否收，缺的那个不是错误。
-for d in icons assets; do
+# social/ 是社交卡（index.html 的 og:image 是绝对 URL，指向的正是本站这一张）：漏了它，
+# 抓取器拿到的卡片就是 404——页面上每个字都对，分享出去是一块空白。
+for d in icons assets social; do
   [ -d "$d" ] && cp -r "$d" "$DEST/"
 done
 

@@ -1,26 +1,30 @@
 {
-  "name": "魔方袖珍",
-  "short_name": "魔方袖珍",
-  "start_url": ".",
-  "display": "standalone",
-  "background_color": "#0a0a12",
-  "theme_color": "#0a0a12",
+  "name": "魔方袖珍 · Pocket Cube",
+  "short_name": "Pocket Cube",
+  "description": "二阶魔方。每关 par 由 8!×3^7 = 88,179,840 个状态上的完整广度优先扫描量出来。",
+  "id": "./",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0f1217",
+  "theme_color": "#101318",
+  "lang": "zh-CN",
+  "categories": ["games", "puzzle"],
   "icons": [
-    {
-      "src": "icons/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "icons/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    },
-    {
-      "src": "icons/icon-maskable-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
+    { "src": "icons/icon-96.png", "sizes": "96x96", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-128.png", "sizes": "128x128", "type": "image/png", "purpose": "any" },
+    { "src": "icons/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-256.png", "sizes": "256x256", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-1024.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "每日关", "short_name": "每日", "url": "./index.html#/daily", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "随机关", "short_name": "随机", "url": "./index.html#/random/easy", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]
 }

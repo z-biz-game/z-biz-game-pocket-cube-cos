@@ -24,8 +24,8 @@
 //
 // 这一腿不覆盖什么：它只证明印在纸上的行号还坐在它所描述的那几行上，不证明周围的句子。
 // 跑法：`node tools/docs-test.mjs` —— 同一条命令住在 npm test 的链里、tools/verify.sh 的套件段与 .github/workflows/ci.yml 里。
-// 它**不在** `npm run unit` 的那个 test/*.test.mjs 循环里：README「跑起来」一节印的是「五个 test/*.test.mjs 各跑一遍」，
-// 而 `unit` 与 `verify.sh` 里那条循环数的就是那 5 个文件；把第六套塞进同一条循环而不动那句话
+// 它**不在** `npm run unit` 的那个 test/*.test.mjs 循环里：README「跑起来」一节印的是「N 个 test/*.test.mjs 各跑一遍」，
+// 而 `unit` 与 `verify.sh` 里那条循环数的就是目录里那些文件；多塞一个套件进同一条循环而不动那句话
 // 就是文档说谎，所以最后几条腿钉的就是"进链、不进循环、目录实数与那句量词相等"这三件事必须同时成立。
 // 另外：本仓的文档还指着 tools/verify.sh 与 tools/playtest.mjs 自己的行号 ⇒ 往那份整闸里插东西时，
 // 插入点必须落在被引用的最后一条之后。
@@ -385,14 +385,14 @@ const suiteFiles = fs.readdirSync(path.join(ROOT, 'test')).filter((f) => f.endsW
 const nodeSuites = suiteFiles.length;
 const CN = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
 const readmeNow = fs.existsSync(path.join(ROOT, 'README.md')) ? fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8') : '';
-// README 那句「五个 test/*.test.mjs 各跑一遍」里的量词，写的时候没人数的就是目录本身。
+// README 那句「N 个 test/*.test.mjs 各跑一遍」里的量词，写的时候没人数的就是目录本身。
 // 这句在本仓有两处写法：`npm run unit` 那行的代码块里没有反引号、下面散文里有一对反引号。
 // 只取第一处＝另一处随它漂，所以这里两处都数并要求同值。
 const suiteClaims = [...readmeNow.matchAll(/(\d+|[一二三四五六七八九十])\s*个\s*`?test\/\*\.test\.mjs/g)]
   .map((m) => (/^\d+$/.test(m[1]) ? Number(m[1]) : CN[m[1]]));
 ok('D9d 这条闸进 `npm test` 的链，但**不进** `npm run unit` 与 `node --test` 的那个 test/*.test.mjs 展开——' +
-  'README 印的是「五个 test/*.test.mjs 各跑一遍」，而 unit 与 verify.sh 那条循环数的都是目录里那 5 个文件；' +
-  '把它算成第六个套件就是文档说谎（这一格现在当场数目录里的套件数，并与那句里的量词对账）',
+  `README 印的是「${nodeSuites} 个 test/*.test.mjs 各跑一遍」，而 unit 与 verify.sh 那条循环数的就是目录里这 ${nodeSuites} 个文件；` +
+  '多算一个套件就是文档说谎（这一格当场数目录里的套件数，并与那句里的量词对账）',
   chain.includes(CMD) && !unitScript.includes('docs-test')
     && suiteClaims.length >= 1 && suiteClaims.every((n) => n === nodeSuites),
   `链含本闸=${chain.includes(CMD)} · unit=${unitScript} · test/*.test.mjs 实数 ${nodeSuites} · ` +
@@ -421,14 +421,14 @@ const sumTest = tbl.filter((r) => r.file.startsWith('test/')).reduce((s, r) => s
 const claimAll = Number((/\*\*node 层\*\*（(\d+) 行/.exec(readmeNow) || [, '-1'])[1]);
 const claimWhole = Number(/整层 (\d+) 行/.exec(readmeNow)?.[1] ?? '-1');
 const claimSuites = Number(/各跑一遍（(\d+) 行/.exec(readmeNow)?.[1] ?? '-1');
-// deliverable 那张承诺表也抄了同一个总数（「5 个套件 56 行 + 分层门 4 行 = 60 行」）。
+// deliverable 那张承诺表也抄了同一个总数（「9 个套件 86 行 + 分层门 4 行 = 90 行」）。
 // 它是本仓对外的交付口径，抄错的那一格比 README 更容易被人当真，所以一并钉住。
 const deliverableNow = fs.existsSync(path.join(ROOT, 'deliverable.md')) ? fs.readFileSync(path.join(ROOT, 'deliverable.md'), 'utf8') : '';
 const claimLedger = Number(/分层门 4 行 = (\d+) 行/.exec(deliverableNow)?.[1] ?? '-1');
 ok('D9f README 印的 node 层条数是恒等式：表里 `行数` 列之和 = 「node 层（N 行）」= 「整层 N 行」= deliverable 承诺表的「= N 行」，' +
-  '而五个 test 行之和 = 「各跑一遍（N 行）」（改一行的读数忘了改总数，红在这里）',
+  '而 test/ 各行之和 = 「各跑一遍（N 行）」（改一行的读数忘了改总数，红在这里）',
   claimAll === sumAll && claimWhole === sumAll && claimSuites === sumTest && claimLedger === sumAll,
-  `表里合计 ${sumAll}（其中 test/ 五行 ${sumTest}）· README 写 node 层 ${claimAll} / 整层 ${claimWhole} / 各跑一遍 ${claimSuites}` +
+  `表里合计 ${sumAll}（其中 test/ 各行 ${sumTest}）· README 写 node 层 ${claimAll} / 整层 ${claimWhole} / 各跑一遍 ${claimSuites}` +
   ` · deliverable 承诺表写 ${claimLedger}`);
 
 // ── 打印 ──────────────────────────────────────────────────────────────────
