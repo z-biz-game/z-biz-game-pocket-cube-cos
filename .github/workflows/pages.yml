@@ -19,20 +19,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # No bundler and no dependencies: the game ships plain ES modules, so the site is a
-      # file copy. The list below is whatever index.html, css/game.css and manifest.webmanifest
-      # reach for, and test/shell.test.mjs fails the suite if a path is referenced but not copied
-      # here — the first version of this step shipped only index.html, css and js, so every icon,
-      # the manifest, the service worker and both textures 404'd on Pages while looking complete in
-      # the repo. Keep the server, the electron shell, the bake tool and the tests out. The
-      # 88,179,840-cube sweep that measures every `par` is a build-time job
-      # (js/core/fullsweep.js is not imported by js/main.js); the browser only reads its result
-      # out of js/data/lots.js, which is a generated source file like any other.
+      # No bundler and no dependencies: the game ships plain ES modules, so the site is a file
+      # copy. Which files is written in exactly one place — tools/assemble-site.sh — and both this
+      # step and tools/deploy-set.mjs call that script, so the artifact CI uploads is the artifact
+      # the gate checked. Keep the server, the electron shell, the bake tool and the tests out; the
+      # 88,179,840-cube sweep that measures every `par` is a build-time job (js/core/fullsweep.js
+      # is not imported by js/main.js), and the browser only reads its result out of js/data/lots.js.
       - name: Assemble static site
-        run: |
-          mkdir _site
-          cp index.html manifest.webmanifest sw.js _site/
-          cp -r css js icons assets social _site/
+        run: bash tools/assemble-site.sh _site
+      - name: Deploy set gate (checks the very _site about to be uploaded)
+        run: node tools/deploy-set.mjs _site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
