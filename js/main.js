@@ -470,7 +470,10 @@ window.addEventListener('keydown', (ev) => {
   } else if (k === 'p') setPaused(!view.paused);
   else if (k === 'm') setMuted(!audio.muted);
   else if (k === 'f') toggleFullscreen().then(syncFullscreen);
-  else if (k === 'h' || k === '?') showHelp(el.helpPanel.hidden);
+  // H is the hint, as the tutorial's prose and the panel button both say; `?` is the help
+  // toggle. One letter cannot mean both, and H-as-help left the advertised hint key dead.
+  else if (k === 'h') el.hint.click();
+  else if (k === '?') showHelp(el.helpPanel.hidden);
   else if (k === 'u') el.undo.click();
   else if (k === 'r') el.restart.click();
 });

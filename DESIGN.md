@@ -240,7 +240,7 @@ scramble() / notation() / play / dragsFor / stickerPoint / pickAt / load / resta
 
 ```
 SKIP_UNIT=1 bash tools/verify.sh     → 16.8 s
-  @boot 17/0   @play 17/0   @routes 23/0   @save 14/0   @pointer 19/0   = 90 行, 0 失败
+  @boot 17/0   @play 17/0   @routes 23/0   @save 14/0   @pointer 20/0   = 91 行, 0 失败
   console 空、Chrome 自行退出、末行 === ALL GREEN ===
 ```
 
@@ -266,13 +266,13 @@ SKIP_UNIT=1 bash tools/verify.sh     → 16.8 s
 ```
 npm run check                → OK, rc=0
 node test/geom.test.mjs      → rows: 18 fail: 0    (0.05 s)
-node test/library.test.mjs   → rows:  9 fail: 0    (7.6 s，64 关全部用两个求解器重解)
+node test/library.test.mjs   → rows:  9 fail: 0    (5.5 s，64 关全部用两个求解器重解)
 node test/game.test.mjs      → rows: 10 fail: 0    (0.03 s)
 node test/storage.test.mjs   → rows: 14 fail: 0    (0.03 s)
 node test/view.test.mjs      → rows:  5 fail: 0    (0.03 s，96 个手势三元组对物理贴纸模型)
 node tools/check.mjs         → rows:  4 fail: 0    (import 落盘 / core 不碰 DOM / core 不 import 壳 / 页面闭包不含构建期层)
 node tools/proof.mjs         → ALL PROOFS PASS     (35 行 ok / 0 FAIL；214–233 s, 峰值 410 MB) ⇒ CI 里独立一个 proof job
-bash tools/verify.sh         → 60 + 90 行, 0 失败, 量级 25–29 s（观测值见 deliverable §5.5）, console 空, === ALL GREEN ===
+bash tools/verify.sh         → 90 + 91 行, 0 失败, 量级 25–29 s（观测值见 deliverable §5.5）, console 空, === ALL GREEN ===
 ```
 
 三条历史故障要写清"错在哪一侧"，因为把它们读成"引擎有 bug"会误导下一位：
@@ -304,7 +304,8 @@ bash tools/verify.sh         → 60 + 90 行, 0 失败, 量级 25–29 s（观�
   结果 JSON 用 `json.JSONDecoder().raw_decode` 从 console 里截，**不要**自己数花括号：行里带中文、
   带嵌套 detail，一个含 `{` 的文本会让计数永远回不了零，聚合器死在 NameError 上、连 verdict都不印。
   这几条本仓已经落地，台架也从 gridlock 改写到了 `window.pocketcube`（§7.3 记了改写之后红的那五条）。
-- `<link rel="icon" href="data:,">` 在 `index.html:8`，防 favicon 404 污染 console 断言。
+- favicon 用的是真文件（`icons/favicon-16/32/48.png`、`apple-touch-icon.png`），console 干净因此不靠占位
+  `data:` URI；`test/shell.test.mjs` 另核这些 PNG 的 IHDR 与尺寸。
 - 场景体（写在模板字面量里的页面源码）里不写反引号、不写单反斜杠斜杠；每段执行前清掉
   `window.__lastRows`，否则上一段的行缓冲会被当成本段成绩——坏掉的台架看起来是绿的。
 

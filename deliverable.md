@@ -34,14 +34,14 @@ web **5199** / devtools **9359**，且 `tools/verify.sh:54-63` 在起跑前对�
 | 仓 | `/Users/zifang/workplace/ceo_workplace/z-biz-game/z-biz-game-pocket-cube-cos` | — |
 | 玩法一句话 | 2×2×2 魔方，用尽量少的**季度转**把六个面收回单一颜色 | `js/core/cube.js`（`isSolved`）、`js/core/game.js:158`（`grade`） |
 | 路由 | `#/c/<n>`、`#/campaign/<n>`、`#<n>`、`#/daily`、`#/random/<档>[/<种子>]`、`#/lot/<id>`、`#/cube/<打乱公式>` | `js/main.js` 的 `parseHash`；浏览器侧由 `@routes` 的 23 行断言（§5.5） |
-| 测试钩子 | `window.pocketcube`，定义在 `js/main.js:487` | `tools/playtest.mjs` 与 `tools/verify.sh` 驱动的就是它（第一轮时它们还在驱动上一仓的 `window.gridlock`） |
+| 测试钩子 | `window.pocketcube`，定义在 `js/main.js:490` | `tools/playtest.mjs` 与 `tools/verify.sh` 驱动的就是它（第一轮时它们还在驱动上一仓的 `window.gridlock`） |
 | 主张：`par` 从哪来 | 全群 `8!·3⁷ = 88,179,840` 个状态的穷尽 BFS 距离（一字节一格），逐层直方图与 **OEIS A080630** 逐行相同，直径 **14**、顶上 **6,624** 个状态 | `node tools/bake.mjs`（§4.1）、`node tools/proof.mjs` 的枚举段（§5.4） |
 | 第二证据（防自证） | 每关从**序列化之后的 `scrText`** 再独立解一遍：双向 BFS + IDA\*（五块 PDB），两个都必须等于印着的 `par`，解串回放必须回到已解态 | **`node test/library.test.mjs`** 的第 3 行 `every shipped par survives a re-solve by the reference solver`（§5.2，5.5 s，**在 CI 里**） |
 | 难度带是量出来的 | `4-6 / 7-9 / 10-11 / 12-14` = 全群 par 直方图的四段，占群 `0.279% / 13.863% / 62.094% / 23.763%`；本批**落成**是 `4-6 / 7-9 / 10-11 / 12-13` | `js/data/lots.js` 的 `TIERS_META`（`max` 与 `seen` 两栏并排）；`node -e 'import("./js/core/library.js").then(m=>console.log(m.stats()))'` |
 | 契约 §3 的"唯一解/线索删除"那类证明 | **不适用**：二阶没有线索可拆，本仓用的是"穷尽 + 外部对账 + 双求解器"。没有伪装成适用 | 见 `README.md` 已知边界、`DESIGN.md` §1–§2 |
 | node 断言 | **9 个套件 86 行 + 分层门 4 行 = 90 行，`fail: 0`**（第一轮：1 个套件 18 行、1 行红）；本轮在同一个 node 段里再发一格**文档行号对账**（条数由那条腿自己的台账钉，见 README 同名一节） | `bash tools/verify.sh` 前半（§5.2、§5.3） |
 | 数学断言 | `node tools/proof.mjs` → `ALL PROOFS PASS`：**35 行 ok / 0 FAIL**，本次 233 s（同日另一次 214 s、峰值 410 MB） | §5.4；CI 里是独立的 `proof` job（第一轮它哪儿都没跑） |
-| 浏览器断言 | **5 个场景 90 行，`fail: 0`**（`@boot 17` / `@play 17` / `@routes 23` / `@save 14` / `@pointer 19`），console 干净，Chrome 自行退出 | `SKIP_UNIT=1 bash tools/verify.sh`（§5.5） |
+| 浏览器断言 | **5 个场景 91 行，`fail: 0`**（`@boot 17` / `@play 17` / `@routes 23` / `@save 14` / `@pointer 20`），console 干净，Chrome 自行退出 | `SKIP_UNIT=1 bash tools/verify.sh`（§5.5） |
 | 整条门 | `bash tools/verify.sh` → `=== ALL GREEN ===`，rc=0，**25.7 s**；接上文档行号对账那一格之后 2026-10-08 复跑：同样 rc=0，**23.1 s** | §5.5 原文（那是 09-28 那一次的粘贴；两处都是观测值） |
 | 语法门禁 | `npm run check` → `OK`，rc=0 | §5.1 |
 | npm 依赖 | `dependencies = {}`、`devDependencies = {}`，无 `node_modules` | `node -e 'const p=require("./package.json");console.log(p.dependencies,p.devDependencies)'` → `{} {}` |
@@ -61,8 +61,8 @@ web **5199** / devtools **9359**，且 `tools/verify.sh:54-63` 在起跑前对�
 |---|---|---|
 | `index.html` | 壳：顶栏 / `#cube` 画布 / 右侧面板 / 通关卡；图标是真文件（`icons/favicon-16/32/48`、`apple-touch-icon`），og:image 指向 `social/og.png` | `@boot` 的 6 行（控件齐、画布不是未样式的 300×150、魔方真被画出来、rAF 在推进、一次重画推得动 frames、地址栏无 hash 也出第 1 关）＋ `@play` 的"卡片升起"（§5.5）。`test/shell.test.mjs` 另核图标字节与社交卡尺寸，console 干净因此不靠占位 `data:` URI |
 | `css/game.css` | 全部样式，单文件 | `@boot`（`#cube` 有真实像素）、`@pointer` 的坐标断言（样式把画布摆到哪儿，命中测试就得算到哪儿：`dragFor` 给的是 client 坐标，`box.left/top` 加了才发给 CDP） |
-| `js/view.js` | canvas 2D 自写投影、手势（拖面 = 转、拖空白 = 看）、`stickerPoint/dragsFor/pointAt/cellPoint`（`js/view.js:798-818`）、`dirty` 重绘标志（`js/view.js:200`、`js/view.js:541`、`js/view.js:674`）、`dragFor` 的 `pressable/under`（`js/view.js:433-450`） | **`test/view.test.mjs`**（6 行，node 层）：`dragTurn()` 对 96 个 (角块, 面, 拖动方向) 三元组逐个对**物理贴纸模型**，48 组反拖 = 逆转，一个贴纸恰好四拖 = 相邻两面的正反，转的是脚下那层。＋ `@pointer` 19 行（真鼠标事件，含 `pressable` 的往返断言，§2#16） |
-| `js/main.js` | 路由、DOM、存档写入、`window.pocketcube`（`js/main.js:487`）、`pickAt`（`js/main.js:588`）、只接受 `pressable` 的 `dragRoute`（`js/main.js:597`） | `@boot/@play/@routes/@save/@pointer` 全部 90 行；分层侧由 `tools/check.mjs` 第 4 行钉住"页面的模块闭包不许碰构建期层" |
+| `js/view.js` | canvas 2D 自写投影、手势（拖面 = 转、拖空白 = 看）、`stickerPoint/dragsFor/pointAt/cellPoint`（`js/view.js:798-818`）、`dirty` 重绘标志（`js/view.js:200`、`js/view.js:541`、`js/view.js:674`）、`dragFor` 的 `pressable/under`（`js/view.js:433-450`） | **`test/view.test.mjs`**（6 行，node 层）：`dragTurn()` 对 96 个 (角块, 面, 拖动方向) 三元组逐个对**物理贴纸模型**，48 组反拖 = 逆转，一个贴纸恰好四拖 = 相邻两面的正反，转的是脚下那层。＋ `@pointer` 20 行（真鼠标事件，含 `pressable` 的往返断言，§2#16） |
+| `js/main.js` | 路由、DOM、存档写入、`window.pocketcube`（`js/main.js:490`）、`pickAt`（`js/main.js:591`）、只接受 `pressable` 的 `dragRoute`（`js/main.js:600`） | `@boot/@play/@routes/@save/@pointer` 全部 91 行；分层侧由 `tools/check.mjs` 第 4 行钉住"页面的模块闭包不许碰构建期层" |
 
 ### js/core/*（纯函数层，`node` 直接 import）
 
@@ -85,7 +85,7 @@ web **5199** / devtools **9359**，且 `tools/verify.sh:54-63` 在起跑前对�
 | 文件 | 作用 | 由谁验证 |
 |---|---|---|
 | `js/data/lots.js` | 构建期产物（25,540 B）：`BAKE` 实录、`TIERS_META` 四档、64 行 `par/q/states/check` | `node tools/bake.mjs`（写它之前逐关重解 + A080630 对账，§4.1）；再由 `test/library.test.mjs` 从 `scrText` 逐行重解（**这条在 CI 里**）；再由 `library.js` 在加载期复验结构。**行数的两种数法**：`grep -c '^  {"id":"cube-'` → 64（关卡），`grep -c '^  {'` → 68（多 4 行 `TIERS_META`）——第一轮引的是后者却写 64，见 §2#20 |
-| `server.cjs` | 零依赖静态服务器，默认端口 **5199** | `@*` 全部 90 行都是透过它跑的（`tools/verify.sh:77` 起它、`tools/verify.sh:102-107` 轮询它）；`npm run check` 过语法。第一轮写的"默认 5180"是错的（§2#19） |
+| `server.cjs` | 零依赖静态服务器，默认端口 **5199** | `@*` 全部 91 行都是透过它跑的（`tools/verify.sh:77` 起它、`tools/verify.sh:102-107` 轮询它）；`npm run check` 过语法。第一轮写的"默认 5180"是错的（§2#19） |
 | `electron/main.cjs` | 桌面壳，复用 `server.cjs` 且 `port: 0` | **只有语法门禁**；**未真实启动过**（仓内不装 electron），见 §6-3 |
 
 ### tools/ 与 test/
@@ -97,7 +97,7 @@ web **5199** / devtools **9359**，且 `tools/verify.sh:54-63` 在起跑前对�
 | `tools/proof.mjs` | 对外锚点集合：转表双射、判据穷举、编码互逆、群阶枚举、双求解器 300 题对账、不可解态判定、PDB 空洞与 1-Lipschitz、启发可采纳、`FULL=1` 全群直径 | 本机实跑 → **35 行 ok / 0 FAIL / `ALL PROOFS PASS`**（§5.4）。第一轮的 `rankTo8` 崩溃与换位子断言都修了（§2#2、#3），且它现在在 CI 里有自己的 job |
 | `tools/check.mjs` | **本次新增**的分层门，4 行：27 个 source 的相对 import 全部落盘、`js/core` 不碰 DOM（`storage.js` 只豁免 `window.localStorage`）、core 不 import `main/view`、`js/main.js` 的**传递模块闭包**（9 个文件）不许出现构建期模块 | `node tools/check.mjs` → `rows: 4 fail: 0`（§5.3）。四条都做过变异验证（每条各造一次违规，全部红）。CI：`unit` job 的 `Layering` step ＋ `verify.sh` 里无条件执行 |
 | `tools/harness.mjs` | 微型框架 `test/ok/eq/run`；每个套件打一行 `rows: N fail: M` | 本次所有 `rows:` 行都是它打的（§5.2、§5.5） |
-| `tools/playtest.mjs` | 零依赖 CDP 驱动（`open/nav/eval/tap/shot/logs` + 真鼠标 `@pointer`），五个场景体驱动 `window.pocketcube` | `bash tools/verify.sh` 的浏览器层 90 行（§5.5）。第一轮它用的是上一仓的原语，本次整体重写 |
+| `tools/playtest.mjs` | 零依赖 CDP 驱动（`open/nav/eval/tap/shot/logs` + 真鼠标 `@pointer`），五个场景体驱动 `window.pocketcube` | `bash tools/verify.sh` 的浏览器层 91 行（§5.5）。第一轮它用的是上一仓的原语，本次整体重写 |
 | `tools/modifiers.mjs` | **本次新增**的一次性量具：把 CDP `Input.dispatchMouseEvent` 的 modifier 位在本机 Chrome 上实测一遍（alt=1、ctrl=2、meta=4、shift=8、16=无） | `node tools/modifiers.mjs`。它的产物是 `@pointer` 里"这一按在页面里确实是 shift 键按下"那条断言的锚——位不猜，量 |
 | `tools/verify.sh` | 一次性验收门（端口占用即拒 `exit 6`、独立 profile、双端点轮询、`trap cleanup EXIT`、`raw_decode` 截 JSON、`SKIP_UNIT`、结尾确认 Chrome 真的退了） | 本机实跑 rc=0（§5.5）。`tools/verify.sh:130-131` 现在**无条件**跑 `tools/check.mjs`——第一轮那里是 `if [ -f tools/check.mjs ]`，而当时那个文件**不存在**（§2#17） |
 | `test/geom.test.mjs` | 几何层 18 项：字母表、顺转的矩阵含义、半转不扭转、4-循环、双射、delta 守恒、判据穷举、贴纸模型 300 词对账、`cwTurnOf`、手抄面循环表 | `node test/geom.test.mjs` → `rows: 18 fail: 0`（§5.2）。第一轮那 1 行红是手抄的 L 循环表方向反了，改的是那一行（§2#1） |
@@ -134,16 +134,18 @@ web **5199** / devtools **9359**，且 `tools/verify.sh:54-63` 在起跑前对�
 | 8 | **[风险类]** 把 IDA\* 的启发做成规格写的 h1+h2（单角块表 + 扭转赤字） | 实测它们分别 ≤ 3 与 ≤ 1..2，对真 par 11–13 的状态"可采纳但没用"，IDA\* 会漫游。本仓加第三项（五块 PDB，直径 10）并取 max，这是对规格的**明确偏离**而非漏抄 | `js/core/ida.js:20-26` 注释即此；`proof.mjs` 把它变成了实测：`measured: h1 never exceeds 3, h2 never exceeds 2, TWIST_STEP = 4`、`the pattern database's own diameter is 10 over 1632960 abstract states`、`h <= BFS par on every sampled cube  0 of 120 overestimated`（§5.4） |
 | 9 | **[风险类]** 让玩家点击时现场求解（"这样偏离路线也能给数"） | 一次 par 13 的重解实测 1,441 ms（BFS，1.3 M 结点）/ 2,460 ms（IDA\*，334,675 结点）；无上限搜索放进前端就是契约 §5 禁的那件事 | `js/core/game.js:139` 偏离时返回 `off-route` 并拒绝给数（`@play`："偏离认证路线时提示明说，并继续计费"）；`js/main.js` 不 import `bfs/ida/fullsweep/pdb/make`——本次这条从"grep + 注释"升级成了**门禁**：`tools/check.mjs` 第 4 行算的是传递闭包（§5.3） |
 | 10 | **[已修]** `store.reset()` 只清 localStorage、留内存缓存这件事当时**只有实现没有断言** | 陈旧缓存比不清档更糟：屏幕说清了、纪录还会回来。`js/core/storage.js` 的 `memory`/`cache` 必须一起换 | `test/storage.test.mjs` 的 D 组；`@save` 的"清空存档要两次点击，点完成绩归零"与"清空后存档键还在，写的是空表（不是把键删掉）"（§5.5） |
-| 11 | **[已修]** 台架 `Page.navigate` 后固定 `sleep()`、结果 JSON `JSON.parse(整行)`，且轮询的钩子名是上一仓的 `window.gridlock` | 本地够用、线上不够：canvas 停在未样式的 300×150 会被读成三条假故障；headless 会在同一行后面追加文本；轮询错钩子则永远 `exit 5`。`tools/verify.sh:94-107`、`tools/verify.sh:140-145` 改成双端点轮询 + `window.pocketcube`；`playtest.mjs` 的五个场景体整体重写成本仓原语；截 JSON 用 `raw_decode` 而不是手的花括号计数 | `bash tools/verify.sh` 的 90 行（§5.5）。第一轮的"截图与日志路径仍叫 `/tmp/gridlock-*`"也改掉（`TAG=pocketcube`，`tools/verify.sh:25`） |
+| 11 | **[已修]** 台架 `Page.navigate` 后固定 `sleep()`、结果 JSON `JSON.parse(整行)`，且轮询的钩子名是上一仓的 `window.gridlock` | 本地够用、线上不够：canvas 停在未样式的 300×150 会被读成三条假故障；headless 会在同一行后面追加文本；轮询错钩子则永远 `exit 5`。`tools/verify.sh:94-107`、`tools/verify.sh:140-145` 改成双端点轮询 + `window.pocketcube`；`playtest.mjs` 的五个场景体整体重写成本仓原语；截 JSON 用 `raw_decode` 而不是手的花括号计数 | `bash tools/verify.sh` 的 91 行（§5.5）。第一轮的"截图与日志路径仍叫 `/tmp/gridlock-*`"也改掉（`TAG=pocketcube`，`tools/verify.sh:25`） |
 | 12 | **[已修，本次]** `#/cube/<公式>` 直接把壳弄崩 | `game.js` 无条件给 lot 建 `rank → 下一步` 的路线索引；自定义题没有 `route`，于是崩在解析路由那一步。`routeMap()` 现在**返回 null** 而不是造一个空 Map——空 Map 会被读成"在认证路线的终点"（`js/core/game.js:25-30`） | `@routes`："#/cube/<转记法> 开出自定义魔方：par 是空的"、"自定义魔方面板把 par 印成「未实测」"、"读不懂的乱序会明说，并且不换题"；node 侧 `fromScramble`（`js/core/library.js:89-105`）由 `test/library.test.mjs` 第 8 行验 |
 | 13 | **[已修，本次]** `超出` 给**没有实测 par** 的题印一个真数 | `moves - null` 在 JS 里是 `moves`（`Number(null) === 0`），所以手打公式的题会得到"超出 6"这种凭空捏出来的数。`grade()`/`overPar()` 现在先看 `par == null`，返回 `unmeasured` 而不是数字（`js/core/game.js:156-168`） | `@routes`："没有实测 par 就没有「超出」这个数：面板只会说没有可对照"、"未实测的题不印星，只印「复原了」"；node 侧 `test/storage.test.mjs` 的 D5 行 |
 | 14 | **[已修，本次]** 拖空白转镜头之后，画面不动 | 帧循环只在"有动画"时才重画，纯视角改动没有动画。`js/view.js` 的 `dirty` 标志（`js/view.js:200`）由视角改动置位（`js/view.js:541`），帧循环 `moved || dirty` 才画（`js/view.js:674`）。这条不只是好不好看：`picked`（下一次按下要命中测试的那组四边形）是在 `draw()` 里生成的，不重画就意味着**画面和命中区域分家** | `@pointer` 的"按住 shift 拖是转身看向魔方：画面动了，转数没动"与"转身之后第一下拖仍然落在它声称的那一面"；`@boot` 的"一次重画把 frames 推上去" |
 | 15 | **[已修，本次]** 未实测的题能拿到 `perfect`，`turns: null` 能写进存档 | 两处都是 `Number(null) === 0`：`par == null` 的题会把自己判成完美（`0 <= 0`），`turns: null` 会变成 0 转的"成绩"并打败榜上所有纪录。`js/core/storage.js:111-117` 两条守卫分开写，`turns` 必须是**一个计数**而不是"恰好不是负数" | `test/storage.test.mjs` 的 B/C 组（`uint(null)` 那类边界）＋ D5；`@save` 的"提示有独立的账，不影响那一题的完美判定" |
-| 16 | **[已修，本次]** `dragsFor()` 承诺"这四个方向都能按下去"，其中有些**按不下去** | `slideVector` 按贴纸算，但一次按下走的是命中测试：painter 顺序下 `picked` 从远到近生成、`stickerAt` 从后往前扫，于是**更近的贴纸可以盖住更远那个贴纸的质心**。台架照着承诺拖，页面提交的是另一个转——第一次复现是"提示 F、实际转了 L'"。修在产品侧：`dragFor()` 用指针自己那套 `stickerAt` 回读一次，给出 `pressable`/`under` 两个字段（`js/view.js:433-450`）；台架与 `dragRoute()` 都只接受 `pressable` 的拖法（`js/main.js:607`） | `@pointer`："它说是能按下去的拖法，指针落在那一点上读到的就是同一个贴纸"（对每个 `pressable` 拖法比 `pickAt(d.from.x, d.from.y)`）；node 侧 `test/view.test.mjs` 的 96 三元组落点行。实测：路线每一步都有 8 个候选、其中 ≥1 个 `pressable`，整条认证路线可拖完（"鼠标一拖一转，整条认证路线拖得完"） |
+| 16 | **[已修，本次]** `dragsFor()` 承诺"这四个方向都能按下去"，其中有些**按不下去** | `slideVector` 按贴纸算，但一次按下走的是命中测试：painter 顺序下 `picked` 从远到近生成、`stickerAt` 从后往前扫，于是**更近的贴纸可以盖住更远那个贴纸的质心**。台架照着承诺拖，页面提交的是另一个转——第一次复现是"提示 F、实际转了 L'"。修在产品侧：`dragFor()` 用指针自己那套 `stickerAt` 回读一次，给出 `pressable`/`under` 两个字段（`js/view.js:433-450`）；台架与 `dragRoute()` 都只接受 `pressable` 的拖法（`js/main.js:610`） | `@pointer`："它说是能按下去的拖法，指针落在那一点上读到的就是同一个贴纸"（对每个 `pressable` 拖法比 `pickAt(d.from.x, d.from.y)`）；node 侧 `test/view.test.mjs` 的 96 三元组落点行。实测：路线每一步都有 8 个候选、其中 ≥1 个 `pressable`，整条认证路线可拖完（"鼠标一拖一转，整条认证路线拖得完"） |
 | 17 | **[已修，本次]** `tools/verify.sh` 引用了一个**磁盘上不存在**的门禁 `tools/check.mjs`，而且是 `if [ -f … ]` | 缺文件的门禁用 `if [ -f ]` 包起来，等于"这条永远通过"——它报绿的同时把仓里唯一那条硬架构规则（生成层不许进浏览器）说成有人守。**门禁存在性本身要红**：现在无条件执行（`tools/verify.sh:130-131`），文件真没了就是 rc≠0 | `node tools/check.mjs` → `rows: 4 fail: 0`（§5.3）；CI `unit` job 的 `Layering` step；变异验证：给 `js/main.js` 加一行 `import './core/fullsweep.js'`，第 4 行立刻红 |
 | 18 | **[风险类，本次]** 用 Node ESM 的 query 尾巴做 cache-busting（`import('../js/core/storage.js?fresh=A')`），一个"检查 import 是否落盘"的门禁会把它读成缺文件 | 那是同一份文件的第二个实例，测试要的就是"两次 import 互不串味"。`check.mjs` 解析 specifier 时先 `spec.split('?')[0]` 再 `resolve`，并把这条写进注释 | `tools/check.mjs` 第 1 行现在报 `27 sources: every relative import names a file that exists`（§5.3）。哪天有人"顺手"去掉那行 `split('?')`，这条立刻红 |
-| 19 | **[已修，本次]** 端口与耗时两处**文档口径**：README 写"server 默认 5180""每关重解一次要花 30 秒"，`package.json` 的 `dev` 是 5190，`verify.sh`/`playtest.mjs` 又是 5180 | `server.cjs` 的默认值才是门禁值。实跑：默认端口 **5199**（`tools/verify.sh:23`、`tools/playtest.mjs:17`、`package.json` 的 `dev` 三处统一）；64 关全部用两个求解器重解实测 **7.6 s**（`test/library.test.mjs`），不是 30 s。同类的还有第一轮那句"浏览器断言 ≥ 35 未达成"——现在 90 条 | 端口有硬钉：`tools/verify.sh:54-63` 端口被占就 `exit 6` 并打印 owner。耗时的钉就是 §5.2 那行 `rows: 9 fail: 0 (7.6 s)` |
+| 19 | **[已修，本次]** 端口与耗时两处**文档口径**：README 写"server 默认 5180""每关重解一次要花 30 秒"，`package.json` 的 `dev` 是 5190，`verify.sh`/`playtest.mjs` 又是 5180 | `server.cjs` 的默认值才是门禁值。实跑：默认端口 **5199**（`tools/verify.sh:23`、`tools/playtest.mjs:17`、`package.json` 的 `dev` 三处统一）；64 关全部用两个求解器重解实测 **5.5 s**（`test/library.test.mjs`），不是 30 s。同类的还有第一轮那句"浏览器断言 ≥ 35 未达成"——现在 91 条 | 端口有硬钉：`tools/verify.sh:54-63` 端口被占就 `exit 6` 并打印 owner。耗时的钉就是 §5.2 那行 `rows: 9 fail: 0 (5.5 s)` |
 | 20 | **[已修，本次]** 第一轮 §3 用 `grep -c '^  {' js/data/lots.js` 得到 64，并把它当"64 关"的证据 | 现在同一命令给 **68**：产物格式里 `TIERS_META` 的四行也是两个空格开头的 `{`。数量没错（关卡一直是 64），错的是**那条命令量的不是"关"** | 正确的两条：`grep -c '^  {"id":"cube-' js/data/lots.js` → `64`；`node -e 'import("./js/core/library.js").then(m=>console.log(m.ALL.length))'` → `64`（§3） |
+| 21 | **[已修，本次]** 帮助面板把 `H` 绑成"开关说明"，与教程正文、`#hint` 按钮自称的 `H` = 提示冲突 | 同一块 UI 两种说法：面板的快捷键表写「H / ? 开关本说明」，正文与按钮却把 H 当提示键；`tools/playtest.mjs` 的 "h 键要一个提示" 因此从合并那次起一直红（CI `browser` job 在 d7d97f3 上就是红的）。产品侧改成 `H` = 提示、`?` = 开关说明（`js/main.js:475-476`），面板表格同步拆成两行 | `@pointer` 的 "h 键要一个提示"（`hints` 从 0 变 1）；`SKIP_UNIT=1 bash tools/verify.sh` → 91 行 0 失败 |
+| 22 | **[已修，本次]** 首次访问的说明遮罩吞掉第一次交互 | 全新 profile 上 `helpPanel` 自动打开，`.help` 是 `inset: 0` 的整板遮罩（`css/game.css:91`），正好盖住画布；台架不先关它就直接拖，于是每次按下都落在面板的 `<li>` 上，`moves` 恒 0、`shift` 读成 null。台架改成先像玩家一样点"开始玩"，并断言面板真的让开画布（`tools/playtest.mjs:232`），再跑真实拖拽 | `@pointer` 的 "关掉首次说明之后画布不再被挡" 与其后 19 行真鼠标拖拽 |
 
 ---
 
@@ -213,7 +215,7 @@ Rejections during this run: {"par-out-of-band":127}
 | 接受率与尝试数 | 66.667%(24) / 40.000%(40) / 20.779%(77) / 6.667%(240) | **72.73%(22) / 51.61%(31) / 25.81%(62) / 21.05%(76)** | 各带 `tried/accepted/rate` 行、`TIERS_META.tried/rate` |
 | 拒绝原因计数 | `{par-out-of-band:282, verify:scramble…:35}` | `{par-out-of-band:127}` | `rejections across the run:` 行、`BAKE.rejected` |
 | 出题耗时（oracle 查表） | mean 0.000–0.125 ms/候选 | `meanOracleMs` 0.1818 / 0.0323 / 0.0161 / 0.0263 | 各带 `oracle ms mean`、`TIERS_META.meanOracleMs` |
-| 每关重解耗时 | 中位 0/3/50/427 ms，最慢 1,924 ms | `checkMedMs` 0/3/50/**419**，`checkMaxMs` 2/29/217/**2460** | 每行 `check[].ms`；本次独立复算：64 关合计 7.6 s（§5.2） |
+| 每关重解耗时 | 中位 0/3/50/427 ms，最慢 1,924 ms | `checkMedMs` 0/3/50/**419**，`checkMaxMs` 2/29/217/**2460** | 每行 `check[].ms`；本次独立复算：64 关合计 5.5 s（§5.2） |
 | 最大搜索状态数（重解侧） | BFS 1,300,224（par 13） | BFS 1,300,224 / IDA 334,675 | 每行 `check[].states`；`proof.mjs` 的 300 题段同数量级（§5.4） |
 | 全群扫描内存 | 84.1 MB 距离数组 + 转移表，peak rss 312 MB | 84.1 MB | `distance array 84.1 MB`、`rss` 行 |
 | 复现命令 | `node tools/bake.mjs`（可选 `--per= --only= --strategy= --dry-run`） | — | — |
@@ -241,7 +243,7 @@ $ node test/library.test.mjs
   ok   the four bands are the printed bands, and every cube sits inside its own
   ok   every shipped par survives a re-solve by the reference solver
   …
-rows: 9 fail: 0        # 7.6 s
+rows: 9 fail: 0        # 5.5 s
 ```
 
 输入只是那串打乱记号（`"L' D2 R' U F'"` 这种），不是 `par` 字段本身；两个求解器（双向 BFS、IDA\*+PDB）
@@ -426,12 +428,19 @@ rc=0
 
 ```
 === node suites ===
+--- test/audio.test.mjs … rows: 5 fail: 0
 --- test/game.test.mjs … rows: 10 fail: 0
 --- test/geom.test.mjs … rows: 18 fail: 0
+--- test/input.test.mjs … rows: 7 fail: 0
 --- test/library.test.mjs … rows: 9 fail: 0
+--- test/shell.test.mjs … rows: 9 fail: 0
+--- test/sim.test.mjs … rows: 8 fail: 0
 --- test/storage.test.mjs … rows: 14 fail: 0
---- test/view.test.mjs … rows: 5 fail: 0
+--- test/view.test.mjs … rows: 6 fail: 0
+=== deploy-set ===
+rows: 102 fail: 0
 --- tools/check.mjs … rows: 4 fail: 0
+--- tools/docs-test.mjs … rows: 30 fail: 0
 opened http://127.0.0.1:5199/
 (no console output)
 boot lot: cube-01
@@ -444,31 +453,32 @@ rows: 23 fail: 0
 === @save ===
 rows: 14 fail: 0
 === @pointer ===
-rows: 19 fail: 0
+rows: 20 fail: 0
 === console (must be empty of errors) ===
 (none)
 chrome exited
 === ALL GREEN ===
-real 25.74
+real 42.80
 rc=0
 ```
 
-同一台机器、同一份代码重复跑，**node 层 90 行 + 浏览器层 90 行 = 180 行、0 失败每一次都成立**；
+同一台机器、同一份代码重复跑，**node 层 90 行 + 浏览器层 91 行 = 181 行、0 失败每一次都成立**；
 下面列出的是各次跑出来的墙钟观测值（**不声明总数**——跑的次数比这里多，而这里只是"跑一次大概多久"
 的证据；再复跑只会多一个数，不会让下面这句话变成假话）：
-`25.74` / `25.03` / `26.35` / `27.01` / `28.27` / `28.83` / `28.80` / `28.54` s，量级 25–29 s。
+`25.74` / `25.03` / `26.35` / `27.01` / `28.27` / `28.83` / `28.80` / `28.54` s，量级 25–29 s；
+2026-10-30 在当前树（9 套件 + 20 行 @pointer）上复跑一次是 `42.80` s、rc=0；当次机器负载很高（load avg 26），这个数只作观测，不与上面那批比快慢。
 其中 `26.35` / `27.01` / `28.83` / `28.80` / `28.54` 是在 commit 之后、push 之前对着**入库的那棵树**
 跑的，按顺序分别属于 `a3f3e27`、`5b43c6b`、`0588452`、`450ecaf`、`7fbee99`（§5.7），
 其余是改文档过程中在工作树上跑的；
 浏览器层单独跑（`SKIP_UNIT=1 bash tools/verify.sh`，也就是 CI `browser` job 的命令）
-本机观测到 `real 16.81` 与 `17.39`，两次都 `rc=0`、90 行 0 失败。
+本机观测到 `real 16.81` 与 `17.39`，两次都 `rc=0`、91 行 0 失败。
 
 这一层在本次之前**是红的，而且红在产品代码上**，不是红在台架上：§2#12–#16 那五条
 （`#/cube/` 崩壳、`超出` 给未实测的题印真数、转镜头不重绘、未实测题能拿 `perfect`／`turns: null` 能入库、
 `dragsFor` 承诺了按不下去的拖法）修完之前，`@play`/`@pointer`/`@routes` 都过不去。
 本次**没有放宽、跳过或"重设期望值"任何一条断言**：每条红都是先复现、再判责在哪一侧、然后改那一侧。
 
-`@pointer` 的 19 行为什么必须用真鼠标（而不是直接调函数）：命中测试、`DRAG_THRESHOLD = 16`、
+`@pointer` 的 20 行为什么必须用真鼠标（而不是直接调函数）：命中测试、`DRAG_THRESHOLD = 16`、
 动画终帧、`localStorage` 全都躲在 `window.pocketcube` 后面。其中
 "按下就松开、不走距离，不算一转"与"八像素的抖动在阈值之下，照样不算一转"两条是 par 有意义的前提——
 一次滑动如果被读成三次转，认证路线的长度当场失去含义。modifier 位不是猜的：
@@ -594,7 +604,7 @@ rc=0
    留在账上的差异只有一条：runner 是 **node 22 / Linux**，本机是 **node 26 / arm64**——
    两侧的 `rows:` 数字逐行相同，但本机上没有 node 22 可用来把 §5.2–§5.5 在 22 下重跑一遍，
    所以"两个 node 版本之间没有行为差异"目前是**观察**，不是被验过的断言。
-7. **Pages 已经上线并且是对着线上地址复验的**（§5.7：90 行 0 失败、逐文件 200 且字节数与磁盘同名文件相同）。
+7. **Pages 已经上线并且是对着线上地址复验的**（§5.7：91 行 0 失败、逐文件 200 且字节数与磁盘同名文件相同）。
    没验的是两件事：`js/data/lots.js` 之类**改完之后**的 CDN 缓存失效路径（Pages 的 max-age 由它自己定，
    换 nonce 才能确定性地让玩家拿到新表），以及 Pages 的构建失败会不会让线上留**上一个版本**
    （会——那意味着"远端 CI 绿"和"线上是这一版"是两件事，§5.7 的逐文件字节核对就是为这个）。

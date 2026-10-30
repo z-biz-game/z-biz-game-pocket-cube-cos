@@ -221,6 +221,17 @@ async function pointerScenario(cdp, sessionId, runJS) {
   await runJS(`window.pocketcube.load('#/c/1'); 'ok'`);
   await sleep(SETTLE);
 
+  // A first visit opens the tutorial scrim over the board; until it is dismissed every press
+  // lands on the panel, not the canvas. The rig does what a player does, and asserts the
+  // dismissal actually uncovers the board — otherwise every drag below would be a no-op.
+  const helpOpen = await runJS(`(() => { const p = document.getElementById('helpPanel'); return !!p && !p.hidden; })()`);
+  if (helpOpen) {
+    await runJS(`document.getElementById('helpClose').click(); 'ok'`);
+    await sleep(SETTLE);
+  }
+  rec('关掉首次说明之后画布不再被挡', await runJS(`document.getElementById('helpPanel').hidden`) === true,
+    { openedByItself: helpOpen });
+
   const ids = await runJS(`['cube','undo','hint','restart','share','curtain','stars','verdict','tally','shelf','wipe','readout','hintline','next','again','modes','totals','crumbs'].map((i) => [i, !!document.getElementById(i)])`);
   rec('every control the shell reaches for exists', ids.every(([, on]) => on), Object.fromEntries(ids));
 
