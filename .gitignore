@@ -5,3 +5,7 @@ dist/
 .electron-cache/
 _site/
 _scratch/
+
+# 桌面打包图标是生成物：assets/gen/make-art.mjs 重画一遍（逐字节可复现），
+# 不入库；CI 在跑套件前先画。
+build/
